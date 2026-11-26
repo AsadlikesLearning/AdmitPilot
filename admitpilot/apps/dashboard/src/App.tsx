@@ -733,6 +733,7 @@ export const App: React.FC = () => {
                       scopedCandidates[0] ||
                       null
                     }
+                    isOrgAdmin={currentUser?.role === 'org_admin'}
                     onSelectTab={setCurrentTab}
                     onSelectCandidate={handleSelectCandidate}
                     onNewCandidate={() => {

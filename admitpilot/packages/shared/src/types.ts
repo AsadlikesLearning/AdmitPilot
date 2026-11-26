@@ -326,6 +326,7 @@ export type ApplicationFeeStatus = 'unpaid' | 'paid' | 'waived';
 export type ScholarshipStatus = 'none' | 'eligible' | 'applied' | 'awarded' | 'rejected';
 export type CasStatus = 'not_started' | 'documents_pending' | 'requested' | 'issued';
 export type VisaStatus = 'not_started' | 'preparing' | 'lodged' | 'biometrics_done' | 'granted' | 'refused';
+export type CommissionStatus = 'none' | 'pending' | 'invoiced' | 'received';
 
 export interface ApplicationDocumentChecklistItem {
   id: string;
@@ -381,6 +382,9 @@ export interface ApplicationRecord {
   depositAmount?: string;
   depositDeadline?: string;
   depositPaid?: boolean;
+  commissionRate?: string;
+  commissionAmount?: string;
+  commissionStatus?: CommissionStatus;
   casStatus?: CasStatus;
   casNumber?: string;
   visaStatus?: VisaStatus;

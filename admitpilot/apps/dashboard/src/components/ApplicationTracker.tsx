@@ -31,6 +31,7 @@ import {
   ScholarshipStatus,
   CasStatus,
   VisaStatus,
+  CommissionStatus,
   DocumentCategory,
   UniversityCatalogItem,
   evaluateEligibility,
@@ -522,6 +523,46 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
         </div>
       </div>
 
+      {/* Financial, Deposit & Commission Summary Strip */}
+      {applications.length > 0 && (() => {
+        const depositsPaid = applications.filter((a) => Boolean(a.depositPaid)).length;
+        const depositsPending = applications.filter(
+          (a) => Boolean(a.depositAmount) && !a.depositPaid
+        ).length;
+        const scholarshipsAwarded = applications.filter(
+          (a) => a.scholarshipStatus === 'awarded'
+        ).length;
+        const commPending = applications.filter((a) => a.commissionStatus === 'pending').length;
+        const commInvoiced = applications.filter((a) => a.commissionStatus === 'invoiced').length;
+        const commReceived = applications.filter((a) => a.commissionStatus === 'received').length;
+
+        return (
+          <div className="px-4 py-2.5 rounded-xl bg-surface-card border border-hairline flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-ink-muted">
+                Deposits:{' '}
+                <span className="font-mono text-tone-positive">{depositsPaid} paid</span>
+                {depositsPending > 0 && (
+                  <span className="font-mono text-brass"> · {depositsPending} due</span>
+                )}
+              </span>
+              <span className="text-ink-muted">
+                Scholarships:{' '}
+                <span className="font-mono text-ink-primary">{scholarshipsAwarded} awarded</span>
+              </span>
+            </div>
+            {isOrgAdmin && (
+              <div className="flex flex-wrap items-center gap-3 font-mono">
+                <span className="text-ink-muted">Commissions:</span>
+                <span className="text-brass">{commPending} pending</span>
+                <span className="text-ink-primary">{commInvoiced} invoiced</span>
+                <span className="text-tone-positive">{commReceived} received</span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Pipeline Kanban Board View */}
       {viewMode === 'board' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3.5 items-start">
@@ -989,6 +1030,174 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
                     <option value="refused">Refused</option>
                   </select>
                 </div>
+              </div>
+
+              {/* 1b. Tuition Deposit, Scholarship & Agency Commission */}
+              <div className="p-4 rounded-xl bg-surface-deep border border-hairline space-y-3.5 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-ink-primary">
+                    Tuition deposit, scholarship & agency commission
+                  </span>
+                  <VerificationStamp
+                    tone={selectedApp.depositPaid ? 'positive' : 'brass'}
+                    label={selectedApp.depositPaid ? 'Deposit paid' : 'Deposit unpaid'}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-ink-muted mb-1">Tuition deposit amount</label>
+                    <input
+                      defaultValue={selectedApp.depositAmount || ''}
+                      key={`dep-amt-${selectedApp.id}`}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        if (val !== (selectedApp.depositAmount || '')) {
+                          onUpdateApplication(selectedApp.id, { depositAmount: val || undefined });
+                        }
+                      }}
+                      placeholder="GBP 2,000"
+                      className="field-input h-8 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-ink-muted mb-1">Deposit due date</label>
+                    <input
+                      type="date"
+                      value={selectedApp.depositDeadline || ''}
+                      onChange={(e) =>
+                        onUpdateApplication(selectedApp.id, {
+                          depositDeadline: e.target.value || undefined,
+                        })
+                      }
+                      className="field-input h-8 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-ink-muted mb-1">Deposit status</label>
+                    <select
+                      value={selectedApp.depositPaid ? 'paid' : 'unpaid'}
+                      onChange={(e) =>
+                        onUpdateApplication(selectedApp.id, {
+                          depositPaid: e.target.value === 'paid',
+                        })
+                      }
+                      className="field-input h-8 text-xs"
+                    >
+                      <option value="unpaid">Unpaid</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-hairline">
+                  <div>
+                    <label className="block text-ink-muted mb-1">Scholarship name</label>
+                    <input
+                      defaultValue={selectedApp.scholarshipName || ''}
+                      key={`sch-name-${selectedApp.id}`}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        if (val !== (selectedApp.scholarshipName || '')) {
+                          onUpdateApplication(selectedApp.id, { scholarshipName: val || undefined });
+                        }
+                      }}
+                      placeholder="Merit Bursary"
+                      className="field-input h-8 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-ink-muted mb-1">Scholarship amount</label>
+                    <input
+                      defaultValue={selectedApp.scholarshipAmount || ''}
+                      key={`sch-amt-${selectedApp.id}`}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        if (val !== (selectedApp.scholarshipAmount || '')) {
+                          onUpdateApplication(selectedApp.id, {
+                            scholarshipAmount: val || undefined,
+                          });
+                        }
+                      }}
+                      placeholder="GBP 5,000"
+                      className="field-input h-8 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-ink-muted mb-1">Scholarship status</label>
+                    <select
+                      value={selectedApp.scholarshipStatus || 'none'}
+                      onChange={(e) =>
+                        onUpdateApplication(selectedApp.id, {
+                          scholarshipStatus: e.target.value as ScholarshipStatus,
+                        })
+                      }
+                      className="field-input h-8 text-xs"
+                    >
+                      <option value="none">None</option>
+                      <option value="eligible">Eligible</option>
+                      <option value="applied">Applied</option>
+                      <option value="awarded">Awarded</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </div>
+                </div>
+
+                {isOrgAdmin && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-hairline">
+                    <div>
+                      <label className="block text-ink-muted mb-1">Commission rate</label>
+                      <input
+                        defaultValue={selectedApp.commissionRate || ''}
+                        key={`com-rate-${selectedApp.id}`}
+                        onBlur={(e) => {
+                          const val = e.target.value.trim();
+                          if (val !== (selectedApp.commissionRate || '')) {
+                            onUpdateApplication(selectedApp.id, {
+                              commissionRate: val || undefined,
+                            });
+                          }
+                        }}
+                        placeholder="15%"
+                        className="field-input h-8 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-ink-muted mb-1">Expected commission</label>
+                      <input
+                        defaultValue={selectedApp.commissionAmount || ''}
+                        key={`com-amt-${selectedApp.id}`}
+                        onBlur={(e) => {
+                          const val = e.target.value.trim();
+                          if (val !== (selectedApp.commissionAmount || '')) {
+                            onUpdateApplication(selectedApp.id, {
+                              commissionAmount: val || undefined,
+                            });
+                          }
+                        }}
+                        placeholder="GBP 4,800"
+                        className="field-input h-8 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-ink-muted mb-1">Commission status</label>
+                      <select
+                        value={selectedApp.commissionStatus || 'none'}
+                        onChange={(e) =>
+                          onUpdateApplication(selectedApp.id, {
+                            commissionStatus: e.target.value as CommissionStatus,
+                          })
+                        }
+                        className="field-input h-8 text-xs"
+                      >
+                        <option value="none">Not applicable</option>
+                        <option value="pending">Pending enrolment</option>
+                        <option value="invoiced">Invoiced</option>
+                        <option value="received">Received</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 2. Linked Student Dedicated Email & Portal Credentials */}

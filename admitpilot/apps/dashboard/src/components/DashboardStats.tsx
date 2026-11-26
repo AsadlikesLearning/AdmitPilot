@@ -7,6 +7,7 @@ interface StatsProps {
   candidates: CandidateProfile[];
   applications: ApplicationRecord[];
   selectedCandidate: CandidateProfile | null;
+  isOrgAdmin?: boolean;
   onSelectTab: (tab: any) => void;
   onSelectCandidate: (c: CandidateProfile) => void;
   onNewCandidate: () => void;
@@ -16,6 +17,7 @@ export const DashboardStats: React.FC<StatsProps> = ({
   candidates,
   applications,
   selectedCandidate,
+  isOrgAdmin = false,
   onSelectTab,
   onSelectCandidate,
   onNewCandidate,
@@ -41,6 +43,10 @@ export const DashboardStats: React.FC<StatsProps> = ({
       a.status === 'enrolled'
   ).length;
   const scheduledDeadlines = applications.filter((a) => Boolean(a.deadline)).length;
+  const depositsPaidCount = applications.filter((a) => Boolean(a.depositPaid)).length;
+  const activeCommissionsCount = applications.filter(
+    (a) => a.commissionStatus && a.commissionStatus !== 'none'
+  ).length;
 
   const stages = [
     { key: 'ready', label: 'Dossiers verified for portal fill', count: readyCandidates, total: Math.max(totalCandidates, 1), accent: true },
@@ -72,7 +78,9 @@ export const DashboardStats: React.FC<StatsProps> = ({
     {
       label: 'Offers received',
       value: String(offersCount),
-      sub: `${scheduledDeadlines} upcoming deadlines`,
+      sub: isOrgAdmin
+        ? `${depositsPaidCount} deposits paid · ${activeCommissionsCount} commissions`
+        : `${scheduledDeadlines} deadlines · ${depositsPaidCount} deposits paid`,
       highlight: false,
     },
   ];
