@@ -56,10 +56,10 @@ export const VerificationStamp: React.FC<{
       : 'bg-ink-muted';
 
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums text-ink-secondary whitespace-nowrap">
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium tabular-nums text-ink-secondary whitespace-nowrap">
       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
       <span>{label}</span>
-      {meta && <span className="text-ink-muted truncate max-w-[220px]">· {meta}</span>}
+      {meta && <span className="text-ink-muted font-normal truncate max-w-[220px]">· {meta}</span>}
     </span>
   );
 };

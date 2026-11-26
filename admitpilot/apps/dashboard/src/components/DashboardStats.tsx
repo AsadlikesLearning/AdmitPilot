@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, ArrowUpRight } from 'lucide-react';
+import { Plus, ArrowUpRight, CalendarClock } from 'lucide-react';
 import { CandidateProfile, ApplicationRecord } from 'admitpilot-shared';
 import { PassportCredentialCard, VerificationStamp } from './ui/Primitives';
 
@@ -11,6 +11,12 @@ interface StatsProps {
   onSelectTab: (tab: any) => void;
   onSelectCandidate: (c: CandidateProfile) => void;
   onNewCandidate: () => void;
+}
+
+function initialsOf(given?: string, family?: string): string {
+  const a = (given || '').trim()[0] || '';
+  const b = (family || '').trim()[0] || '';
+  return (a + b).toUpperCase() || 'ST';
 }
 
 export const DashboardStats: React.FC<StatsProps> = ({
@@ -48,12 +54,51 @@ export const DashboardStats: React.FC<StatsProps> = ({
     (a) => a.commissionStatus && a.commissionStatus !== 'none'
   ).length;
 
+  const candidateNameById = new Map(
+    candidates.map((c) => [c.id, `${c.personal.legalGivenName} ${c.personal.familyName}`])
+  );
+
   const stages = [
-    { key: 'ready', label: 'Dossiers verified for portal fill', count: readyCandidates, total: Math.max(totalCandidates, 1), accent: true },
-    { key: 'draft', label: 'Applications in preparation', count: draftCount, total: Math.max(applications.length, totalCandidates, 1), accent: false },
-    { key: 'portal', label: 'Active in university portals', count: inPortalCount, total: Math.max(applications.length, totalCandidates, 1), accent: false },
-    { key: 'submitted', label: 'Submitted & under faculty review', count: submittedCount, total: Math.max(applications.length, totalCandidates, 1), accent: false },
-    { key: 'offers', label: 'Conditional & unconditional offers', count: offersCount, total: Math.max(applications.length, totalCandidates, 1), accent: false },
+    {
+      key: 'ready',
+      label: 'Dossiers verified for portal fill',
+      count: readyCandidates,
+      total: Math.max(totalCandidates, 1),
+      tone: 'brass' as const,
+      targetTab: 'candidates',
+    },
+    {
+      key: 'draft',
+      label: 'Applications in preparation',
+      count: draftCount,
+      total: Math.max(applications.length, totalCandidates, 1),
+      tone: 'neutral' as const,
+      targetTab: 'applications',
+    },
+    {
+      key: 'portal',
+      label: 'Active in university portals',
+      count: inPortalCount,
+      total: Math.max(applications.length, totalCandidates, 1),
+      tone: 'neutral' as const,
+      targetTab: 'applications',
+    },
+    {
+      key: 'submitted',
+      label: 'Submitted & under faculty review',
+      count: submittedCount,
+      total: Math.max(applications.length, totalCandidates, 1),
+      tone: 'neutral' as const,
+      targetTab: 'applications',
+    },
+    {
+      key: 'offers',
+      label: 'Conditional & unconditional offers',
+      count: offersCount,
+      total: Math.max(applications.length, totalCandidates, 1),
+      tone: 'positive' as const,
+      targetTab: 'applications',
+    },
   ];
 
   const stats = [
@@ -62,18 +107,24 @@ export const DashboardStats: React.FC<StatsProps> = ({
       value: String(activeCandidates),
       sub: `${totalCandidates} total in workspace`,
       highlight: false,
+      progress: undefined as number | undefined,
+      targetTab: 'candidates',
     },
     {
       label: 'Verification readiness',
       value: `${readinessPct}%`,
       sub: `${readyCandidates} of ${totalCandidates} with passport & test`,
       highlight: true,
+      progress: readinessPct,
+      targetTab: 'candidates',
     },
     {
       label: 'University applications',
       value: String(applications.length),
       sub: `${submittedCount} submitted · ${inPortalCount} in portal`,
       highlight: false,
+      progress: undefined as number | undefined,
+      targetTab: 'applications',
     },
     {
       label: 'Offers received',
@@ -82,6 +133,8 @@ export const DashboardStats: React.FC<StatsProps> = ({
         ? `${depositsPaidCount} deposits paid · ${activeCommissionsCount} commissions`
         : `${scheduledDeadlines} deadlines · ${depositsPaidCount} deposits paid`,
       highlight: false,
+      progress: undefined as number | undefined,
+      targetTab: 'applications',
     },
   ];
 
@@ -105,20 +158,28 @@ export const DashboardStats: React.FC<StatsProps> = ({
           </button>
           <button type="button" onClick={() => onSelectTab('testing')} className="btn-primary">
             <span>Open portal sandbox</span>
-            <ArrowUpRight className="w-4 h-4 text-[#141415]" strokeWidth={1.5} />
+            <ArrowUpRight className="w-4 h-4" strokeWidth={1.5} />
           </button>
         </div>
       </div>
 
-      {/* 4 Compact Stat Cards — numbers only, uniform height */}
+      {/* 4 Interactive Stat Cards — uniform height, clear hierarchy */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((s) => (
-          <div
+          <button
             key={s.label}
-            className="p-5 rounded-xl bg-surface-card border border-hairline flex flex-col justify-between min-h-[112px]"
+            type="button"
+            onClick={() => onSelectTab(s.targetTab)}
+            className="group p-5 rounded-xl bg-surface-card border border-hairline hover:border-hairline-strong text-left flex flex-col justify-between min-h-[116px] transition-colors duration-150 ease-quart"
           >
-            <span className="text-xs text-ink-muted">{s.label}</span>
-            <div className="mt-3">
+            <div className="flex items-center justify-between gap-2 w-full">
+              <span className="text-xs text-ink-muted">{s.label}</span>
+              <ArrowUpRight
+                className="w-3.5 h-3.5 text-ink-muted opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                strokeWidth={1.5}
+              />
+            </div>
+            <div className="mt-3 w-full">
               <p
                 className={`text-[28px] leading-none font-medium tabular-nums ${
                   s.highlight ? 'text-brass' : 'text-ink-primary'
@@ -126,13 +187,21 @@ export const DashboardStats: React.FC<StatsProps> = ({
               >
                 {s.value}
               </p>
+              {s.progress !== undefined && (
+                <div className="h-1 w-full rounded-full bg-surface-deep mt-2.5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-brass transition-[width] duration-300"
+                    style={{ width: `${Math.max(s.progress, s.progress > 0 ? 4 : 0)}%` }}
+                  />
+                </div>
+              )}
               <p className="text-xs text-ink-secondary mt-2 tabular-nums">{s.sub}</p>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
-      {/* Asymmetric Split: 8-col Main Readiness & Ledger + 4-col Credential Card */}
+      {/* Asymmetric Split: 8-col Main Readiness & Ledger + 4-col Credential Card & Queue */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Main 2/3 Column: Intake Pipeline Chart + Candidate Readiness Table */}
         <div className="lg:col-span-8 rounded-xl bg-surface-card border border-hairline overflow-hidden">
@@ -155,32 +224,45 @@ export const DashboardStats: React.FC<StatsProps> = ({
               </button>
             </div>
 
-            {/* Horizontal Stage Comparison Bars on Muted Grid */}
-            <div className="mt-5 space-y-3">
+            {/* Horizontal Stage Comparison Bars */}
+            <div className="mt-5 space-y-2.5">
               {stages.map((st) => {
                 const pct = Math.min(100, Math.round((st.count / st.total) * 100));
+                const barClass =
+                  st.tone === 'brass'
+                    ? 'bg-brass'
+                    : st.tone === 'positive'
+                    ? 'bg-tone-positive'
+                    : 'bg-ink-muted/55';
+                const countClass =
+                  st.tone === 'brass'
+                    ? 'text-brass font-medium'
+                    : st.tone === 'positive'
+                    ? 'text-tone-positive font-medium'
+                    : 'text-ink-primary font-medium';
+
                 return (
-                  <div key={st.key} className="space-y-1.5">
+                  <button
+                    key={st.key}
+                    type="button"
+                    onClick={() => onSelectTab(st.targetTab)}
+                    className="w-full text-left p-2 -mx-2 rounded-lg hover:bg-surface-raised/40 transition-colors duration-150 space-y-1.5 block"
+                  >
                     <div className="flex items-center justify-between text-xs">
-                      <span className={st.accent ? 'text-ink-primary font-medium' : 'text-ink-secondary'}>
+                      <span className={st.tone === 'brass' ? 'text-ink-primary font-medium' : 'text-ink-secondary'}>
                         {st.label}
                       </span>
-                      <span className="font-mono tabular-nums text-ink-muted">
-                        <span className={st.accent ? 'text-brass font-medium' : 'text-ink-primary'}>
-                          {st.count}
-                        </span>{' '}
-                        / {st.total}
+                      <span className="tabular-nums text-ink-muted">
+                        <span className={countClass}>{st.count}</span> / {st.total}
                       </span>
                     </div>
-                    <div className="h-2 w-full rounded bg-surface-deep border border-hairline overflow-hidden">
+                    <div className="h-1.5 w-full rounded-full bg-surface-deep overflow-hidden">
                       <div
-                        className={`h-full rounded ${
-                          st.accent ? 'bg-brass' : 'bg-[#3a3a3f]'
-                        }`}
-                        style={{ width: `${Math.max(pct, st.count > 0 ? 6 : 0)}%` }}
+                        className={`h-full rounded-full ${barClass}`}
+                        style={{ width: `${Math.max(pct, st.count > 0 ? 5 : 0)}%` }}
                       />
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -199,65 +281,95 @@ export const DashboardStats: React.FC<StatsProps> = ({
               </button>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-hairline text-xs text-ink-muted">
-                    <th className="py-2.5 px-6 font-normal">Candidate</th>
-                    <th className="py-2.5 px-4 font-normal">Passport</th>
-                    <th className="py-2.5 px-4 font-normal text-right">GPA</th>
-                    <th className="py-2.5 px-4 font-normal text-right">English</th>
-                    <th className="py-2.5 px-6 font-normal text-right">Readiness</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[rgba(237,237,237,0.06)] text-[13px]">
-                  {candidates.slice(0, 6).map((c) => {
-                    const isSelected = selectedCandidate?.id === c.id;
-                    const edu = c.education[0];
-                    const eng = c.englishTests[0];
-                    const ready = Boolean(c.passport?.passportNumber) && Boolean(eng);
-                    return (
-                      <tr
-                        key={c.id}
-                        onClick={() => {
-                          onSelectCandidate(c);
-                          onSelectTab('candidates');
-                        }}
-                        className={`cursor-pointer transition-colors duration-150 ease-quart ${
-                          isSelected ? 'bg-surface-raised/70' : 'hover:bg-surface-raised/40'
-                        }`}
-                      >
-                        <td className="py-3 px-6">
-                          <div className="font-medium text-ink-primary">
-                            {c.personal.legalGivenName} {c.personal.familyName}
-                          </div>
-                          <div className="text-xs text-ink-muted">{c.personal.nationality}</div>
-                        </td>
-                        <td className="py-3 px-4 font-mono text-xs tabular-nums text-ink-secondary">
-                          {c.passport?.passportNumber || 'Missing'}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-xs tabular-nums text-ink-secondary text-right">
-                          {edu?.gpa || '—'}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-xs tabular-nums text-ink-secondary text-right">
-                          {eng ? `${eng.testType} ${eng.overallScore}` : '—'}
-                        </td>
-                        <td className="py-3 px-6 text-right">
-                          <VerificationStamp
-                            tone={ready ? 'positive' : 'brass'}
-                            label={ready ? 'ready' : 'incomplete'}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {candidates.length === 0 ? (
+              <div className="p-8 text-center space-y-3">
+                <p className="text-sm text-ink-secondary">No candidate dossiers in this workspace yet.</p>
+                <button type="button" onClick={onNewCandidate} className="btn-secondary">
+                  <Plus className="w-4 h-4 text-ink-secondary" strokeWidth={1.5} />
+                  <span>Add first candidate</span>
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-hairline text-xs text-ink-muted">
+                      <th className="py-2.5 px-6 font-normal">Candidate</th>
+                      <th className="py-2.5 px-4 font-normal">Passport</th>
+                      <th className="py-2.5 px-4 font-normal text-right">GPA</th>
+                      <th className="py-2.5 px-4 font-normal text-right">English</th>
+                      <th className="py-2.5 px-6 font-normal text-right">Readiness</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-hairline text-[13px]">
+                    {candidates.slice(0, 6).map((c) => {
+                      const isSelected = selectedCandidate?.id === c.id;
+                      const edu = c.education[0];
+                      const eng = c.englishTests[0];
+                      const hasPassport = Boolean(c.passport?.passportNumber);
+                      const ready = hasPassport && Boolean(eng) && Boolean(edu);
+                      const readinessLabel = ready
+                        ? 'Ready'
+                        : !hasPassport
+                        ? 'Needs passport'
+                        : !eng
+                        ? 'Needs test'
+                        : 'Needs academic';
+
+                      return (
+                        <tr
+                          key={c.id}
+                          onClick={() => {
+                            onSelectCandidate(c);
+                            onSelectTab('candidates');
+                          }}
+                          className={`cursor-pointer transition-colors duration-150 ease-quart ${
+                            isSelected ? 'bg-surface-raised/60' : 'hover:bg-surface-raised/35'
+                          }`}
+                        >
+                          <td className="py-3 px-6">
+                            <div className="flex items-center gap-3">
+                              <span className="w-7 h-7 rounded-md bg-surface-deep border border-hairline flex items-center justify-center font-mono text-[11px] text-brass shrink-0">
+                                {initialsOf(c.personal.legalGivenName, c.personal.familyName)}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="font-medium text-ink-primary truncate">
+                                  {c.personal.legalGivenName} {c.personal.familyName}
+                                </div>
+                                <div className="text-xs text-ink-muted truncate">
+                                  {c.personal.nationality}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-xs tabular-nums text-ink-secondary">
+                            {c.passport?.passportNumber || (
+                              <span className="font-sans text-ink-muted">Missing</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-xs tabular-nums text-ink-secondary text-right">
+                            {edu?.gpa || '—'}
+                          </td>
+                          <td className="py-3 px-4 text-xs tabular-nums text-ink-secondary text-right">
+                            {eng ? `${eng.testType} ${eng.overallScore}` : '—'}
+                          </td>
+                          <td className="py-3 px-6 text-right">
+                            <VerificationStamp
+                              tone={ready ? 'positive' : 'brass'}
+                              label={readinessLabel}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Right 1/3 Column: Tactile Passport & Academic Credential Object + Deadlines */}
+        {/* Right 1/3 Column: Tactile Passport & Academic Credential Object + Portal Queue */}
         <div className="lg:col-span-4 space-y-5">
           {selectedCandidate && (
             <PassportCredentialCard
@@ -269,9 +381,13 @@ export const DashboardStats: React.FC<StatsProps> = ({
           <div className="p-5 rounded-xl bg-surface-card border border-hairline space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-ink-primary">Portal queue</h3>
-              <span className="font-mono text-xs tabular-nums text-ink-muted">
-                {applications.length} tracked
-              </span>
+              <button
+                type="button"
+                onClick={() => onSelectTab('applications')}
+                className="text-xs tabular-nums text-ink-muted hover:text-ink-primary transition-colors"
+              >
+                {applications.length} tracked →
+              </button>
             </div>
 
             {applications.length === 0 ? (
@@ -288,25 +404,49 @@ export const DashboardStats: React.FC<StatsProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="divide-y divide-[rgba(237,237,237,0.06)]">
-                {applications.slice(0, 4).map((a) => (
-                  <div key={a.id} className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-ink-primary truncate">{a.institutionName}</p>
-                      <p className="text-xs text-ink-muted truncate">{a.programName}</p>
-                    </div>
-                    <VerificationStamp
-                      tone={
-                        a.status === 'submitted' ||
-                        a.status === 'conditional_offer' ||
-                        a.status === 'unconditional_offer'
-                          ? 'positive'
-                          : 'brass'
-                      }
-                      label={a.status.replace(/_/g, ' ')}
-                    />
-                  </div>
-                ))}
+              <div className="divide-y divide-hairline">
+                {applications.slice(0, 4).map((a) => {
+                  const studentName = candidateNameById.get(a.candidateId);
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => onSelectTab('applications')}
+                      className="w-full py-2.5 first:pt-0 last:pb-0 flex items-start justify-between gap-3 text-left hover:opacity-85 transition-opacity"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-ink-primary truncate">
+                          {a.institutionName}
+                        </p>
+                        <p className="text-xs text-ink-muted truncate">{a.programName}</p>
+                        {(studentName || a.deadline) && (
+                          <div className="flex items-center gap-2 mt-1 text-[11px] text-ink-secondary">
+                            {studentName && <span className="truncate">{studentName}</span>}
+                            {a.deadline && (
+                              <span className="inline-flex items-center gap-1 text-brass tabular-nums shrink-0">
+                                <CalendarClock className="w-3 h-3" strokeWidth={1.5} />
+                                {a.deadline}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="pt-0.5 shrink-0">
+                        <VerificationStamp
+                          tone={
+                            a.status === 'submitted' ||
+                            a.status === 'conditional_offer' ||
+                            a.status === 'unconditional_offer' ||
+                            a.status === 'enrolled'
+                              ? 'positive'
+                              : 'brass'
+                          }
+                          label={a.status.replace(/_/g, ' ').replace(/^./, (ch) => ch.toUpperCase())}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
