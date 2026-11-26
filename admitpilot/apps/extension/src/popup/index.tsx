@@ -9,10 +9,11 @@ import {
   ShieldCheck,
   CheckCircle,
 } from 'lucide-react';
-import { CandidateProfile } from 'admitpilot-shared';
-import { apiFetch } from '../lib/api';
+import { CandidateProfile, UserProfile } from 'admitpilot-shared';
+import { apiFetch, getExtensionMe } from '../lib/api';
 
 export const Popup: React.FC = () => {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [candidates, setCandidates] = useState<CandidateProfile[]>([]);
   const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
@@ -28,7 +29,11 @@ export const Popup: React.FC = () => {
       }
     });
 
-    // 2. Fetch fresh candidates from backend
+    // 2. Fetch signed-in consultant + fresh scoped candidates from backend
+    getExtensionMe()
+      .then((me) => setCurrentUser(me))
+      .catch(() => {});
+
     apiFetch('/candidates')
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -85,9 +90,15 @@ export const Popup: React.FC = () => {
         </div>
       </div>
 
-      {/* Active Candidate Pill */}
-      <div className="my-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+      {/* Active Consultant & Candidate Pill */}
+      <div className="my-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+        {currentUser && (
+          <div className="flex items-center justify-between text-[10px] pb-1.5 border-b border-slate-800">
+            <span className="text-slate-300 font-medium truncate">{currentUser.fullName}</span>
+            <span className="text-amber-400 font-mono shrink-0">{currentUser.role}</span>
+          </div>
+        )}
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
           Active Student Profile
         </span>
         {candidates.length === 0 ? (

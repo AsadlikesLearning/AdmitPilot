@@ -1,3 +1,5 @@
+import { UserProfile } from 'admitpilot-shared';
+
 export const BACKEND_URL = 'http://localhost:3001/api';
 
 const TOKEN_STORAGE_KEY = 'admitpilot_auth_token';
@@ -39,6 +41,38 @@ async function fetchDevToken(): Promise<string | null> {
   return null;
 }
 
+export async function loginExtension(
+  email: string,
+  password: string
+): Promise<{ token: string; user: UserProfile }> {
+  const res = await fetch(`${BACKEND_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim(), password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Invalid email or password');
+  }
+  if (data?.token) {
+    await setStoredToken(data.token);
+  }
+  return data;
+}
+
+export async function logoutExtension(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!chrome?.storage?.local) {
+      resolve();
+      return;
+    }
+    chrome.storage.local.remove(
+      [TOKEN_STORAGE_KEY, 'admitpilot_candidates', 'admitpilot_activeCandidate'],
+      () => resolve()
+    );
+  });
+}
+
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   let token = (await getStoredToken()) || (await fetchDevToken());
 
@@ -63,4 +97,24 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     }
   }
   return res;
+}
+
+export async function getExtensionMe(): Promise<UserProfile | null> {
+  const res = await apiFetch('/me');
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function logAutofillAudit(payload: {
+  candidateId: string;
+  portalUrl?: string;
+  hostname?: string;
+  pageTitle?: string;
+  filledCount?: number;
+  attachedCount?: number;
+}): Promise<void> {
+  await apiFetch('/ai/autofill-audit', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }).catch(() => {});
 }

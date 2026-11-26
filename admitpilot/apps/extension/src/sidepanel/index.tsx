@@ -34,10 +34,18 @@ import {
   FieldMapping,
   FileFieldMapping,
   UniversityRequirementReport,
+  UserProfile,
 } from 'admitpilot-shared';
-import { apiFetch } from '../lib/api';
+import { apiFetch, getExtensionMe, loginExtension, logAutofillAudit } from '../lib/api';
 
 export const SidePanel: React.FC = () => {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [authOpen, setAuthOpen] = useState<boolean>(false);
+  const [authEmail, setAuthEmail] = useState<string>('');
+  const [authPassword, setAuthPassword] = useState<string>('');
+  const [authBusy, setAuthBusy] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
   const [candidates, setCandidates] = useState<CandidateProfile[]>([]);
   const [activeCandidate, setActiveCandidate] = useState<CandidateProfile | null>(null);
   const [candidateDocs, setCandidateDocs] = useState<CandidateDocument[]>([]);
@@ -89,6 +97,54 @@ export const SidePanel: React.FC = () => {
   const [chatSending, setChatSending] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
 
+  const loadExtensionWorkspace = async () => {
+    getExtensionMe()
+      .then((me) => setCurrentUser(me))
+      .catch(() => {});
+
+    apiFetch('/settings/ai')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (s?.provider && s?.model) {
+          setAiEngineLabel(`${String(s.provider).toUpperCase()} · ${s.model}`);
+        }
+      })
+      .catch(() => {});
+
+    apiFetch('/candidates')
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data: CandidateProfile[]) => {
+        if (!Array.isArray(data)) throw new Error('Invalid candidates payload');
+        setCandidates(data);
+        setBackendStatus('connected');
+        if (data.length > 0) {
+          chrome.storage?.local?.get(['admitpilot_activeCandidate'], (res) => {
+            const found = data.find((c) => c.id === res?.admitpilot_activeCandidate) || data[0];
+            setActiveCandidate(found);
+          });
+        } else {
+          setActiveCandidate(null);
+          setCandidateDocs([]);
+          setCandidateCreds([]);
+        }
+      })
+      .catch(() => {
+        setBackendStatus('offline');
+        chrome.storage?.local?.get(['admitpilot_candidates', 'admitpilot_activeCandidate'], (res) => {
+          if (res?.admitpilot_candidates?.length) {
+            setCandidates(res.admitpilot_candidates);
+            const found =
+              res.admitpilot_candidates.find((c: any) => c.id === res?.admitpilot_activeCandidate) ||
+              res.admitpilot_candidates[0];
+            setActiveCandidate(found);
+          }
+        });
+      });
+  };
+
   useEffect(() => {
     if (chrome.tabs?.query) {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -122,44 +178,26 @@ export const SidePanel: React.FC = () => {
       });
     }
 
-    apiFetch('/settings/ai')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((s) => {
-        if (s?.provider && s?.model) {
-          setAiEngineLabel(`${String(s.provider).toUpperCase()} · ${s.model}`);
-        }
-      })
-      .catch(() => {});
-
-    apiFetch('/candidates')
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data: CandidateProfile[]) => {
-        if (!Array.isArray(data)) throw new Error('Invalid candidates payload');
-        setCandidates(data);
-        setBackendStatus('connected');
-        if (data.length > 0) {
-          chrome.storage?.local?.get(['admitpilot_activeCandidate'], (res) => {
-            const found = data.find((c) => c.id === res?.admitpilot_activeCandidate) || data[0];
-            setActiveCandidate(found);
-          });
-        }
-      })
-      .catch(() => {
-        setBackendStatus('offline');
-        chrome.storage?.local?.get(['admitpilot_candidates', 'admitpilot_activeCandidate'], (res) => {
-          if (res?.admitpilot_candidates?.length) {
-            setCandidates(res.admitpilot_candidates);
-            const found =
-              res.admitpilot_candidates.find((c: any) => c.id === res?.admitpilot_activeCandidate) ||
-              res.admitpilot_candidates[0];
-            setActiveCandidate(found);
-          }
-        });
-      });
+    loadExtensionWorkspace();
   }, []);
+
+  const handleExtensionLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthBusy(true);
+    try {
+      const { user } = await loginExtension(authEmail, authPassword);
+      setCurrentUser(user);
+      setAuthPassword('');
+      setAuthOpen(false);
+      await loadExtensionWorkspace();
+      showNotice('success', `Signed in as ${user.fullName}`);
+    } catch (err: any) {
+      setAuthError(err?.message || 'Sign in failed');
+    } finally {
+      setAuthBusy(false);
+    }
+  };
 
   // Load documents & portal credentials whenever activeCandidate changes
   useEffect(() => {
@@ -341,6 +379,15 @@ export const SidePanel: React.FC = () => {
         const count = response.result?.filledCount ?? approved.length;
         setFilledCount(count);
         showNotice('success', `Populated ${count} portal field${count === 1 ? '' : 's'}`);
+        if (activeCandidate?.id) {
+          logAutofillAudit({
+            candidateId: activeCandidate.id,
+            portalUrl: currentTabInfo.url,
+            hostname: currentTabInfo.hostname,
+            pageTitle: currentTabInfo.title,
+            filledCount: count,
+          });
+        }
       }
     });
   };
@@ -390,6 +437,15 @@ export const SidePanel: React.FC = () => {
               'success',
               `Attached ${count} document${count === 1 ? '' : 's'} directly to portal file inputs`
             );
+            if (activeCandidate?.id && count > 0) {
+              logAutofillAudit({
+                candidateId: activeCandidate.id,
+                portalUrl: currentTabInfo.url,
+                hostname: currentTabInfo.hostname,
+                pageTitle: currentTabInfo.title,
+                attachedCount: count,
+              });
+            }
           }
         }
       );
@@ -537,10 +593,64 @@ export const SidePanel: React.FC = () => {
         </div>
       )}
 
-      {/* Active Candidate Selector */}
+      {/* Consultant Auth & Active Candidate Selector */}
       <div className="p-3 bg-[#19191b] border-b border-[rgba(237,237,237,0.08)] shrink-0 space-y-2">
+        <div className="flex items-center justify-between gap-2 text-[11px] pb-1.5 border-b border-[rgba(237,237,237,0.06)]">
+          <div className="min-w-0 truncate">
+            <span className="text-[#ededed] font-medium">
+              {currentUser?.fullName || 'Consultant'}
+            </span>
+            {currentUser?.role && (
+              <span className="text-[#85858b] ml-1.5">· {currentUser.role}</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthOpen((o) => !o);
+              setAuthError(null);
+            }}
+            className="text-[11px] text-[#d4a853] hover:underline shrink-0"
+          >
+            {authOpen ? 'Cancel' : 'Switch account'}
+          </button>
+        </div>
+
+        {authOpen && (
+          <form onSubmit={handleExtensionLogin} className="space-y-1.5 pb-1.5 border-b border-[rgba(237,237,237,0.06)]">
+            {authError && (
+              <p className="text-[11px] text-[#e56464]">{authError}</p>
+            )}
+            <input
+              required
+              type="email"
+              value={authEmail}
+              onChange={(e) => setAuthEmail(e.target.value)}
+              placeholder="Work email"
+              className="w-full bg-[#0f0f10] border border-[rgba(237,237,237,0.12)] rounded px-2 py-1 text-[11px] text-[#ededed]"
+            />
+            <div className="flex items-center gap-1.5">
+              <input
+                required
+                type="password"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                placeholder="Password"
+                className="flex-1 bg-[#0f0f10] border border-[rgba(237,237,237,0.12)] rounded px-2 py-1 text-[11px] text-[#ededed]"
+              />
+              <button
+                type="submit"
+                disabled={authBusy}
+                className="px-2.5 py-1 rounded bg-[#ededed] text-[#141415] text-[11px] font-medium shrink-0"
+              >
+                {authBusy ? '...' : 'Sign in'}
+              </button>
+            </div>
+          </form>
+        )}
+
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-[#6b6b72]">Active dossier</span>
+          <span className="text-[#6b6b72]">Active dossier ({candidates.length})</span>
           {activeCandidate?.passport?.passportNumber && (
             <span className="font-mono text-[#d4a853]">
               {activeCandidate.passport.passportNumber}
@@ -553,11 +663,15 @@ export const SidePanel: React.FC = () => {
           onChange={(e) => handleSelectCandidate(e.target.value)}
           className="w-full bg-[#0f0f10] border border-[rgba(237,237,237,0.12)] rounded-lg px-2.5 py-1.5 text-xs text-[#ededed] focus:outline-none focus:border-[#d4a853]"
         >
-          {candidates.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.personal.legalGivenName} {c.personal.familyName} ({c.personal.nationality})
-            </option>
-          ))}
+          {candidates.length === 0 ? (
+            <option value="">No assigned dossiers</option>
+          ) : (
+            candidates.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.personal.legalGivenName} {c.personal.familyName} ({c.personal.nationality})
+              </option>
+            ))
+          )}
         </select>
       </div>
 

@@ -1288,6 +1288,77 @@ app.post('/api/ai/agent-chat', async (req, res) => {
   }
 });
 
+// Log Chrome Extension Auto-Fill & Document Attachment Audit Event into Applications Timeline
+app.post('/api/ai/autofill-audit', async (req: AuthRequest, res) => {
+  try {
+    const {
+      candidateId,
+      portalUrl,
+      hostname,
+      pageTitle,
+      filledCount = 0,
+      attachedCount = 0,
+    } = req.body || {};
+
+    if (!candidateId) {
+      return res.status(400).json({ error: 'candidateId is required' });
+    }
+
+    const candidate = await store.getCandidate(String(candidateId));
+    if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+
+    const visible = await filterCandidatesForUser(req, [candidate]);
+    if (visible.length === 0) {
+      return res.status(403).json({ error: 'Access denied for this candidate' });
+    }
+
+    const actor = req.user?.id ? await store.getUserProfile(req.user.id) : null;
+    const actorName = actor?.fullName || req.user?.email || 'Consultant';
+    const now = new Date().toISOString();
+    const targetHost = hostname || (portalUrl ? new URL(portalUrl).hostname : 'university portal');
+
+    const parts: string[] = [];
+    if (Number(filledCount) > 0) parts.push(`filled ${filledCount} field${filledCount === 1 ? '' : 's'}`);
+    if (Number(attachedCount) > 0) parts.push(`attached ${attachedCount} document${attachedCount === 1 ? '' : 's'}`);
+    const summaryText = `Chrome extension ${parts.join(' and ') || 'ran autofill'} on ${targetHost}${
+      pageTitle ? ` (${String(pageTitle).slice(0, 60)})` : ''
+    }`;
+
+    const apps = await store.listApplications(candidate.id);
+    const matchingApps = apps.filter(
+      (a) =>
+        a.portalUrl &&
+        targetHost &&
+        a.portalUrl.toLowerCase().includes(String(targetHost).toLowerCase())
+    );
+    const targetApps = matchingApps.length > 0 ? matchingApps : apps.slice(0, 1);
+
+    if (targetApps.length > 0) {
+      for (const appRecord of targetApps) {
+        await store.saveApplication({
+          ...appRecord,
+          lastActivityAt: now,
+          updatedAt: now,
+          timeline: [
+            {
+              id: `tl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              timestamp: now,
+              actor: actorName,
+              type: 'note',
+              text: summaryText,
+            },
+            ...(appRecord.timeline || []),
+          ],
+        });
+      }
+    }
+
+    res.json({ logged: true, updatedApplications: targetApps.length, summary: summaryText });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // AI Settings
 app.get('/api/settings/ai', async (_req, res) => {
   try {
