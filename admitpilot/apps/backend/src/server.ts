@@ -321,7 +321,11 @@ function buildPublicIntakePortalInfo(
     totalUploaded: documents.length,
     requiredCompleted,
     requiredTotal: requiredItems.length,
-    expiresAt: candidate.intakeShareExpiresAt,
+    expiresAt:
+      candidate.intakeShareExpiresAt ||
+      (candidate.intakeShareCreatedAt
+        ? new Date(new Date(candidate.intakeShareCreatedAt).getTime() + INTAKE_LINK_TTL_MS).toISOString()
+        : undefined),
     pinProtected: Boolean(candidate.intakeSharePin),
   };
 }
@@ -1234,6 +1238,12 @@ app.post('/api/candidates/:id/intake-link', async (req, res) => {
       candidate.intakeShareToken = crypto.randomBytes(18).toString('base64url');
       candidate.intakeShareCreatedAt = new Date().toISOString();
       candidate.intakeShareExpiresAt = new Date(Date.now() + INTAKE_LINK_TTL_MS).toISOString();
+      changed = true;
+    } else if (!candidate.intakeShareExpiresAt) {
+      const baseTs = candidate.intakeShareCreatedAt
+        ? new Date(candidate.intakeShareCreatedAt).getTime()
+        : Date.now();
+      candidate.intakeShareExpiresAt = new Date(baseTs + INTAKE_LINK_TTL_MS).toISOString();
       changed = true;
     }
     if (hasPinField) {
