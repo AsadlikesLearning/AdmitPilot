@@ -206,15 +206,44 @@ export class DocumentExtractorService {
       }
 
       if (rawText.trim().length < 40) {
+        // Check for plain ASCII Tj text in minimal uncompressed PDFs (reject binary compressed noise)
         try {
           const buf = dataBuffer.toString('latin1');
-          const tjMatches = Array.from(buf.matchAll(/\(([^()\\]{2,200})\)\s*Tj/g)).map((m) => m[1]);
-          if (tjMatches.length > 0) {
+          const tjMatches = Array.from(buf.matchAll(/\(([^()\\]{3,200})\)\s*Tj/g))
+            .map((m) => m[1])
+            .filter((s) => {
+              const printable = s.replace(/[^\x20-\x7E]/g, '');
+              return printable.length / s.length >= 0.9;
+            });
+          if (tjMatches.length >= 2) {
             preserveLineText = tjMatches.join('\n');
             rawText = preserveLineText;
           }
         } catch {
           // ignore
+        }
+      }
+
+      // Scanned image-only PDF fallback: extract embedded JPEG page scan for Vision AI + Tesseract OCR
+      if (rawText.trim().length < 40) {
+        const embeddedJpeg = this.extractLargestPdfJpeg(dataBuffer);
+        if (embeddedJpeg) {
+          if (embeddedJpeg.byteLength <= 10 * 1024 * 1024) {
+            inlineMedia = {
+              mimeType: 'image/jpeg',
+              base64Data: embeddedJpeg.toString('base64'),
+            };
+          }
+          try {
+            const ocrText = await this.performOCR(embeddedJpeg);
+            if (ocrText.trim().length > rawText.trim().length) {
+              preserveLineText = ocrText;
+              rawText = ocrText;
+              ocrApplied = true;
+            }
+          } catch (ocrErr) {
+            console.warn('[AdmitPilot Extractor] Scanned PDF OCR fallback:', (ocrErr as Error).message);
+          }
         }
       }
     } else if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext) || mimeType.startsWith('image/')) {
@@ -286,10 +315,38 @@ export class DocumentExtractorService {
     };
   }
 
-  private async performOCR(filePath: string): Promise<string> {
+  /**
+   * Extracts the largest embedded JPEG stream (/DCTDecode) from a scanned image-only PDF.
+   */
+  private extractLargestPdfJpeg(pdfBuffer: Buffer): Buffer | null {
+    const jpegs: Buffer[] = [];
+    const soi = Buffer.from([0xff, 0xd8, 0xff]);
+    const eoi = Buffer.from([0xff, 0xd9]);
+    const endStreamToken = Buffer.from('endstream', 'latin1');
+
+    let pos = 0;
+    while ((pos = pdfBuffer.indexOf(soi, pos)) !== -1) {
+      const nextEndStream = pdfBuffer.indexOf(endStreamToken, pos);
+      const searchLimit = nextEndStream !== -1 ? nextEndStream : pdfBuffer.length;
+      const slice = pdfBuffer.subarray(pos, searchLimit);
+      const eoiIdx = slice.lastIndexOf(eoi);
+      if (eoiIdx > 1024) {
+        jpegs.push(Buffer.from(slice.subarray(0, eoiIdx + 2)));
+        pos += eoiIdx + 2;
+      } else {
+        pos += 3;
+      }
+    }
+
+    if (jpegs.length === 0) return null;
+    jpegs.sort((a, b) => b.byteLength - a.byteLength);
+    return jpegs[0];
+  }
+
+  private async performOCR(source: string | Buffer): Promise<string> {
     const worker = await createWorker('eng');
     try {
-      const ret = await worker.recognize(filePath);
+      const ret = await worker.recognize(source);
       return ret.data.text || '';
     } finally {
       await worker.terminate();

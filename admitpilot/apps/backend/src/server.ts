@@ -411,7 +411,10 @@ async function processAndMergeDocumentFile(
     'targetInstitution',
     'targetProgram',
     'recommenderName',
+    'placeOfIssue',
+    'issuingCountry',
   ]);
+  const OCR_NAME_KEYS = new Set(['legalGivenName', 'familyName', 'fullName', 'issuingCountry']);
 
   if (aiResult?.fields) {
     for (const [k, v] of Object.entries(aiResult.fields)) {
@@ -421,7 +424,8 @@ async function processAndMergeDocumentFile(
         extraction.fields[k] === null ||
         extraction.fields[k] === '';
       const canRefine =
-        existingMeta?.source !== 'mrz' && AI_REFINABLE_KEYS.has(k);
+        (existingMeta?.source !== 'mrz' && AI_REFINABLE_KEYS.has(k)) ||
+        (aiResult.usedVision && extraction.ocrApplied && OCR_NAME_KEYS.has(k));
 
       if (isMissing || canRefine) {
         const mapping = FIELD_TARGET_MAP[k];
