@@ -105,7 +105,7 @@ export const CandidateList: React.FC<CandidateListProps> = ({
             <span>Export CSV</span>
           </button>
           <button type="button" onClick={onNewCandidate} className="btn-primary">
-            <Plus className="w-4 h-4 text-[#141415]" strokeWidth={1.5} />
+            <Plus className="w-4 h-4" strokeWidth={1.5} />
             <span>Add candidate</span>
           </button>
         </div>
@@ -170,7 +170,7 @@ export const CandidateList: React.FC<CandidateListProps> = ({
                 <th className="py-3 px-5 font-normal text-right">Dossier</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[rgba(237,237,237,0.06)] text-[13px]">
+            <tbody className="divide-y divide-hairline text-[13px]">
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-ink-muted text-sm">

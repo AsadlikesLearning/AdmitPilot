@@ -1,12 +1,8 @@
 import React, { useState } from 'react';
 import {
   User,
-  BookOpen,
-  Briefcase,
-  Languages,
   FileText,
   GraduationCap,
-  FileCheck2,
   Upload,
   Mail,
   Shield,
@@ -123,16 +119,10 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
     | 'overview'
     | 'applications'
     | 'payments'
-    | 'credentials'
     | 'documents'
-    | 'personal'
-    | 'contact'
-    | 'passport'
-    | 'education'
-    | 'language'
-    | 'employment'
-    | 'evidence'
-    | 'notes'
+    | 'academics'
+    | 'identity'
+    | 'credentials'
   >('overview');
 
   // Student Payment modal state
@@ -441,7 +431,7 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
             onClick={() => setIsUploadModalOpen(true)}
             className="btn-primary"
           >
-            <Upload className="w-4 h-4 text-[#141415]" strokeWidth={1.5} />
+            <Upload className="w-4 h-4" strokeWidth={1.5} />
             <span>Upload documents</span>
           </button>
           <button
@@ -495,15 +485,15 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
       </div>
 
       {/* Portal Readiness Checklist */}
-      <div className="px-6 py-3 border-b border-hairline bg-surface-deep/25 flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex flex-wrap items-center gap-1.5">
+      <div className="px-6 py-2.5 border-b border-hairline bg-surface-deep/25 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           {readinessChecks.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={item.onClick}
               title={item.ready ? `${item.label} verified` : `Click to resolve ${item.label}`}
-              className="px-2.5 py-1 rounded-md bg-surface-card border border-hairline hover:border-hairline-strong inline-flex items-center gap-1.5 text-xs transition-colors"
+              className="inline-flex items-center text-xs hover:opacity-80 transition-opacity"
             >
               <VerificationStamp
                 tone={item.isNegative ? 'negative' : item.ready ? 'positive' : 'brass'}
@@ -513,28 +503,27 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
           ))}
         </div>
         {!onBackToList && (
-          <span className="font-mono text-[11px] text-ink-muted shrink-0">
+          <span className="text-[11px] tabular-nums text-ink-muted shrink-0">
             Portal readiness {readyScore}%
           </span>
         )}
       </div>
 
-      {/* Sub-navigation Tabs */}
+      {/* Sub-navigation Tabs (7 clean tabs — zero horizontal overflow) */}
       <div className="flex border-b border-hairline px-6 bg-surface-deep/50 overflow-x-auto">
         {[
           { id: 'overview', label: 'Summary', icon: User },
           { id: 'applications', label: 'Applications', count: applications.length, icon: ClipboardList },
-          { id: 'payments', label: 'Payments & receipts', count: (candidate.payments || []).length, icon: Receipt },
-          { id: 'credentials', label: 'Credentials & emails', count: credentials.length, icon: KeyRound },
+          { id: 'payments', label: 'Payments', count: (candidate.payments || []).length, icon: Receipt },
           { id: 'documents', label: 'Documents', count: documents.length, icon: FileText },
-          { id: 'passport', label: 'Passport & MRZ', icon: Shield },
-          { id: 'education', label: 'Education', count: candidate.education.length, icon: GraduationCap },
-          { id: 'language', label: 'Language', count: candidate.englishTests.length, icon: Languages },
-          { id: 'employment', label: 'Employment', count: candidate.employment.length, icon: Briefcase },
-          { id: 'personal', label: 'Personal', icon: User },
-          { id: 'contact', label: 'Contact', icon: Mail },
-          { id: 'evidence', label: 'Provenance', icon: FileCheck2 },
-          { id: 'notes', label: 'Notes', icon: BookOpen },
+          {
+            id: 'academics',
+            label: 'Academics',
+            count: candidate.education.length + candidate.englishTests.length,
+            icon: GraduationCap,
+          },
+          { id: 'identity', label: 'Identity & MRZ', icon: Shield },
+          { id: 'credentials', label: 'Logins', count: credentials.length, icon: KeyRound },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -788,6 +777,38 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
                   </button>
                 </div>
               </div>
+
+              {(candidate.additional?.financialSupport ||
+                candidate.additional?.emergencyContacts ||
+                candidate.additional?.notes) && (
+                <div className="p-5 rounded-xl bg-surface-deep border border-hairline space-y-3">
+                  <h3 className="text-sm font-medium text-ink-primary">Advisory & notes</h3>
+                  {candidate.additional?.financialSupport && (
+                    <div>
+                      <span className="block text-[11px] text-ink-muted">Financial sponsorship</span>
+                      <p className="text-xs text-ink-secondary mt-0.5">
+                        {candidate.additional.financialSupport}
+                      </p>
+                    </div>
+                  )}
+                  {candidate.additional?.emergencyContacts && (
+                    <div>
+                      <span className="block text-[11px] text-ink-muted">Emergency contact</span>
+                      <p className="text-xs text-ink-secondary mt-0.5">
+                        {candidate.additional.emergencyContacts}
+                      </p>
+                    </div>
+                  )}
+                  {candidate.additional?.notes && (
+                    <div>
+                      <span className="block text-[11px] text-ink-muted">Consultant notes</span>
+                      <p className="text-xs text-ink-secondary mt-0.5">
+                        {candidate.additional.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1153,249 +1174,217 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
           </div>
         )}
 
-        {activeTab === 'personal' && (
-          <div className="p-5 rounded-xl bg-surface-deep border border-hairline">
-            <h3 className="text-sm font-medium text-ink-primary mb-4">Legal identity</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <FieldCell label="Given names" value={candidate.personal.legalGivenName} />
-              <FieldCell label="Middle name" value={candidate.personal.middleName} />
-              <FieldCell label="Family surname" value={candidate.personal.familyName} />
-              <FieldCell label="Date of birth" value={candidate.personal.dateOfBirth} mono />
-              <FieldCell label="Gender" value={candidate.personal.gender} />
-              <FieldCell label="Marital status" value={candidate.personal.maritalStatus} />
-              <FieldCell label="Primary nationality" value={candidate.personal.nationality} />
-              <FieldCell label="Country of birth" value={candidate.personal.countryOfBirth} />
-              <FieldCell label="National ID" value={candidate.personal.nationalId} mono />
+        {activeTab === 'identity' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-7 p-5 rounded-xl bg-surface-deep border border-hairline">
+                <h3 className="text-sm font-medium text-ink-primary mb-4">Travel document fields</h3>
+                {candidate.passport ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <FieldCell label="Passport number" value={candidate.passport.passportNumber} mono />
+                    <FieldCell label="Name on document" value={candidate.passport.fullName} />
+                    <FieldCell label="Issuing country" value={candidate.passport.issuingCountry} />
+                    <FieldCell label="Place of issue" value={candidate.passport.placeOfIssue} />
+                    <FieldCell label="Issue date" value={candidate.passport.issueDate} mono />
+                    <FieldCell label="Expiry date" value={candidate.passport.expiryDate} mono />
+                  </div>
+                ) : (
+                  <div className="py-6 space-y-3">
+                    <p className="text-sm text-ink-secondary">No passport scan attached to this dossier</p>
+                    <button type="button" onClick={() => setIsUploadModalOpen(true)} className="btn-primary">
+                      Upload passport scan
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="lg:col-span-5">
+                <PassportCredentialCard candidate={candidate} />
+              </div>
+            </div>
+
+            <div className="p-5 rounded-xl bg-surface-deep border border-hairline">
+              <h3 className="text-sm font-medium text-ink-primary mb-4">Legal identity</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <FieldCell label="Given names" value={candidate.personal.legalGivenName} />
+                <FieldCell label="Middle name" value={candidate.personal.middleName} />
+                <FieldCell label="Family surname" value={candidate.personal.familyName} />
+                <FieldCell label="Date of birth" value={candidate.personal.dateOfBirth} mono />
+                <FieldCell label="Gender" value={candidate.personal.gender} />
+                <FieldCell label="Marital status" value={candidate.personal.maritalStatus} />
+                <FieldCell label="Primary nationality" value={candidate.personal.nationality} />
+                <FieldCell label="Country of birth" value={candidate.personal.countryOfBirth} />
+                <FieldCell label="National ID" value={candidate.personal.nationalId} mono />
+              </div>
+            </div>
+
+            <div className="p-5 rounded-xl bg-surface-deep border border-hairline">
+              <h3 className="text-sm font-medium text-ink-primary mb-4">Residential & contact details</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <FieldCell label="Personal email" value={candidate.contact.email} />
+                <FieldCell label="Dedicated student portal email" value={primaryStudentEmail} mono />
+                <FieldCell label="Mobile phone" value={candidate.contact.phone} mono />
+                <FieldCell label="WhatsApp" value={candidate.contact.whatsapp || candidate.contact.phone} mono />
+                <FieldCell label="Street address" value={candidate.contact.currentAddress} />
+                <FieldCell
+                  label="City, state & postal code"
+                  value={`${candidate.contact.city}, ${candidate.contact.state} ${candidate.contact.postalCode}`}
+                />
+                <FieldCell label="Country of residence" value={candidate.contact.country} />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-medium text-ink-primary">Field provenance & audit ledger</h3>
+                <p className="text-[13px] text-ink-secondary mt-0.5">
+                  Source document, extraction confidence, and consultant verification state per field
+                </p>
+              </div>
+              <div className="bg-surface-deep border border-hairline rounded-xl overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-hairline text-xs text-ink-muted">
+                      <th className="py-2.5 px-4 font-normal">Field key</th>
+                      <th className="py-2.5 px-4 font-normal">Source document</th>
+                      <th className="py-2.5 px-4 font-normal text-right">Confidence</th>
+                      <th className="py-2.5 px-4 font-normal text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-hairline text-[13px]">
+                    {Object.entries(candidate.evidence || {}).map(([key, ev]) => (
+                      <tr key={key} className="hover:bg-surface-card">
+                        <td className="py-2.5 px-4 font-mono text-xs text-ink-primary">{key}</td>
+                        <td className="py-2.5 px-4 text-ink-secondary">{ev.sourceDocumentName || 'Manual entry'}</td>
+                        <td className="py-2.5 px-4 font-mono text-xs tabular-nums text-ink-primary text-right">
+                          {(ev.confidence * 100).toFixed(0)}%
+                        </td>
+                        <td className="py-2.5 px-4 text-right">
+                          <VerificationStamp
+                            tone={ev.status === 'verified' ? 'positive' : 'brass'}
+                            label={ev.status}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                    {Object.keys(candidate.evidence || {}).length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-ink-muted text-sm">
+                          No provenance entries recorded
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
-        {activeTab === 'contact' && (
-          <div className="p-5 rounded-xl bg-surface-deep border border-hairline">
-            <h3 className="text-sm font-medium text-ink-primary mb-4">Residential & contact details</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <FieldCell label="Personal email" value={candidate.contact.email} />
-              <FieldCell label="Dedicated student portal email" value={primaryStudentEmail} mono />
-              <FieldCell label="Mobile phone" value={candidate.contact.phone} mono />
-              <FieldCell label="WhatsApp" value={candidate.contact.whatsapp || candidate.contact.phone} mono />
-              <FieldCell label="Street address" value={candidate.contact.currentAddress} />
-              <FieldCell
-                label="City, state & postal code"
-                value={`${candidate.contact.city}, ${candidate.contact.state} ${candidate.contact.postalCode}`}
-              />
-              <FieldCell label="Country of residence" value={candidate.contact.country} />
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'passport' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="lg:col-span-7 p-5 rounded-xl bg-surface-deep border border-hairline">
-              <h3 className="text-sm font-medium text-ink-primary mb-4">Travel document fields</h3>
-              {candidate.passport ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <FieldCell label="Passport number" value={candidate.passport.passportNumber} mono />
-                  <FieldCell label="Name on document" value={candidate.passport.fullName} />
-                  <FieldCell label="Issuing country" value={candidate.passport.issuingCountry} />
-                  <FieldCell label="Place of issue" value={candidate.passport.placeOfIssue} />
-                  <FieldCell label="Issue date" value={candidate.passport.issueDate} mono />
-                  <FieldCell label="Expiry date" value={candidate.passport.expiryDate} mono />
+        {activeTab === 'academics' && (
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-ink-primary">Academic qualifications</h3>
+                <button type="button" onClick={() => setIsUploadModalOpen(true)} className="btn-secondary">
+                  Upload transcript
+                </button>
+              </div>
+              {candidate.education.length === 0 ? (
+                <div className="p-8 rounded-xl bg-surface-deep border border-hairline text-center text-sm text-ink-muted">
+                  No academic records logged yet
                 </div>
               ) : (
-                <div className="py-6 space-y-3">
-                  <p className="text-sm text-ink-secondary">No passport scan attached to this dossier</p>
-                  <button type="button" onClick={() => setIsUploadModalOpen(true)} className="btn-primary">
-                    Upload passport scan
-                  </button>
+                <div className="space-y-3">
+                  {candidate.education.map((edu, idx) => (
+                    <div key={edu.id || idx} className="p-5 rounded-xl bg-surface-deep border border-hairline">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-base font-medium text-ink-primary">{edu.degreeTitle}</p>
+                          <p className="text-[13px] text-ink-secondary mt-0.5">
+                            {edu.institution} · {edu.country}
+                          </p>
+                        </div>
+                        <VerificationStamp tone="positive" label={edu.qualificationLevel} meta={edu.status} />
+                      </div>
+                      <div className="flex flex-wrap gap-6 mt-4 pt-3 border-t border-hairline text-xs text-ink-secondary tabular-nums">
+                        <span>Major: {edu.major}</span>
+                        <span>GPA / Grade: {edu.gpa || '—'}</span>
+                        {edu.awardDate && <span>Awarded: {edu.awardDate}</span>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-            <div className="lg:col-span-5">
-              <PassportCredentialCard candidate={candidate} />
-            </div>
-          </div>
-        )}
 
-        {activeTab === 'education' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-ink-primary">Academic qualifications</h3>
-              <button type="button" onClick={() => setIsUploadModalOpen(true)} className="btn-secondary">
-                Upload transcript
-              </button>
-            </div>
-            {candidate.education.length === 0 ? (
-              <div className="p-8 rounded-xl bg-surface-deep border border-hairline text-center text-sm text-ink-muted">
-                No academic records logged yet
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-ink-primary">English proficiency scores</h3>
+                <button type="button" onClick={() => setIsUploadModalOpen(true)} className="btn-secondary">
+                  Upload score report
+                </button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {candidate.education.map((edu, idx) => (
-                  <div key={edu.id || idx} className="p-5 rounded-xl bg-surface-deep border border-hairline">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-base font-medium text-ink-primary">{edu.degreeTitle}</p>
-                        <p className="text-[13px] text-ink-secondary mt-0.5">
-                          {edu.institution} · {edu.country}
-                        </p>
-                      </div>
-                      <VerificationStamp tone="positive" label={edu.qualificationLevel} meta={edu.status} />
-                    </div>
-                    <div className="flex flex-wrap gap-6 mt-4 pt-3 border-t border-hairline text-xs text-ink-secondary font-mono tabular-nums">
-                      <span>Major: {edu.major}</span>
-                      <span>GPA: {edu.gpa || '—'}</span>
-                      {edu.awardDate && <span>Awarded: {edu.awardDate}</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'language' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-ink-primary">English proficiency scores</h3>
-              <button type="button" onClick={() => setIsUploadModalOpen(true)} className="btn-secondary">
-                Upload score report
-              </button>
-            </div>
-            {candidate.englishTests.length === 0 ? (
-              <div className="p-8 rounded-xl bg-surface-deep border border-hairline text-center text-sm text-ink-muted">
-                No language certificates recorded
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {candidate.englishTests.map((test, idx) => (
-                  <div key={test.id || idx} className="p-5 rounded-xl bg-surface-deep border border-hairline">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-base font-medium text-ink-primary">{test.testType}</p>
-                        <p className="font-mono text-xs text-ink-muted tabular-nums mt-0.5">
-                          Date {test.testDate}
-                          {test.referenceNumber ? ` · TRF ${test.referenceNumber}` : ''}
-                        </p>
-                      </div>
-                      <span className="font-mono text-lg font-medium text-brass tabular-nums">
-                        Band {test.overallScore}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-3 mt-4 pt-3 border-t border-hairline">
-                      {[
-                        { label: 'Listening', val: test.listening },
-                        { label: 'Reading', val: test.reading },
-                        { label: 'Writing', val: test.writing },
-                        { label: 'Speaking', val: test.speaking },
-                      ].map((sub) => (
-                        <div key={sub.label} className="p-2.5 rounded-lg bg-surface-card border border-hairline">
-                          <span className="block text-xs text-ink-muted">{sub.label}</span>
-                          <span className="block font-mono text-sm font-medium text-ink-primary tabular-nums mt-0.5">
-                            {sub.val || '—'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'employment' && (
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-ink-primary">Employment history</h3>
-            {candidate.employment.length === 0 ? (
-              <div className="p-8 rounded-xl bg-surface-deep border border-hairline text-center text-sm text-ink-muted">
-                No employment records logged
-              </div>
-            ) : (
-              candidate.employment.map((emp, idx) => (
-                <div key={emp.id || idx} className="p-5 rounded-xl bg-surface-deep border border-hairline">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-base font-medium text-ink-primary">{emp.jobTitle}</span>
-                    <span className="text-[13px] text-ink-secondary">{emp.company}</span>
-                  </div>
-                  <p className="font-mono text-xs text-ink-muted tabular-nums mt-1">
-                    {emp.startDate} — {emp.endDate || (emp.isCurrent ? 'Present' : '—')} · {emp.employmentType}
-                    {emp.location ? ` · ${emp.location}` : ''}
-                  </p>
+              {candidate.englishTests.length === 0 ? (
+                <div className="p-8 rounded-xl bg-surface-deep border border-hairline text-center text-sm text-ink-muted">
+                  No language certificates recorded
                 </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {activeTab === 'evidence' && (
-          <div className="space-y-3">
-            <div>
-              <h3 className="text-sm font-medium text-ink-primary">Field provenance & audit ledger</h3>
-              <p className="text-[13px] text-ink-secondary mt-0.5">
-                Source document, extraction confidence, and consultant verification state per field
-              </p>
-            </div>
-            <div className="bg-surface-deep border border-hairline rounded-xl overflow-hidden">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-hairline text-xs text-ink-muted">
-                    <th className="py-2.5 px-4 font-normal">Field key</th>
-                    <th className="py-2.5 px-4 font-normal">Source document</th>
-                    <th className="py-2.5 px-4 font-normal text-right">Confidence</th>
-                    <th className="py-2.5 px-4 font-normal text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[rgba(237,237,237,0.06)] text-[13px]">
-                  {Object.entries(candidate.evidence || {}).map(([key, ev]) => (
-                    <tr key={key} className="hover:bg-surface-card">
-                      <td className="py-2.5 px-4 font-mono text-xs text-ink-primary">{key}</td>
-                      <td className="py-2.5 px-4 text-ink-secondary">{ev.sourceDocumentName || 'Manual entry'}</td>
-                      <td className="py-2.5 px-4 font-mono text-xs tabular-nums text-ink-primary text-right">
-                        {(ev.confidence * 100).toFixed(0)}%
-                      </td>
-                      <td className="py-2.5 px-4 text-right">
-                        <VerificationStamp
-                          tone={ev.status === 'verified' ? 'positive' : 'brass'}
-                          label={ev.status}
-                        />
-                      </td>
-                    </tr>
+              ) : (
+                <div className="space-y-3">
+                  {candidate.englishTests.map((test, idx) => (
+                    <div key={test.id || idx} className="p-5 rounded-xl bg-surface-deep border border-hairline">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-base font-medium text-ink-primary">{test.testType}</p>
+                          <p className="text-xs text-ink-muted tabular-nums mt-0.5">
+                            Date {test.testDate}
+                            {test.referenceNumber ? ` · TRF ${test.referenceNumber}` : ''}
+                          </p>
+                        </div>
+                        <span className="text-lg font-medium text-brass tabular-nums">
+                          Band {test.overallScore}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-3 mt-4 pt-3 border-t border-hairline">
+                        {[
+                          { label: 'Listening', val: test.listening },
+                          { label: 'Reading', val: test.reading },
+                          { label: 'Writing', val: test.writing },
+                          { label: 'Speaking', val: test.speaking },
+                        ].map((sub) => (
+                          <div key={sub.label} className="p-2.5 rounded-lg bg-surface-card border border-hairline">
+                            <span className="block text-xs text-ink-muted">{sub.label}</span>
+                            <span className="block text-sm font-medium text-ink-primary tabular-nums mt-0.5">
+                              {sub.val || '—'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   ))}
-                  {Object.keys(candidate.evidence || {}).length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="py-8 text-center text-ink-muted text-sm">
-                        No provenance entries recorded
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
-          </div>
-        )}
 
-        {activeTab === 'notes' && (
-          <div className="p-5 rounded-xl bg-surface-deep border border-hairline space-y-4">
-            <h3 className="text-sm font-medium text-ink-primary">Advisory & financial notes</h3>
-            <div className="space-y-4 text-sm">
-              <div>
-                <span className="block text-xs text-ink-muted mb-1.5">Financial sponsorship</span>
-                <p className="p-3.5 rounded-lg bg-surface-card border border-hairline text-ink-secondary">
-                  {candidate.additional?.financialSupport || 'No financial sponsorship notes recorded'}
-                </p>
-              </div>
-              <div>
-                <span className="block text-xs text-ink-muted mb-1.5">Emergency contact</span>
-                <p className="p-3.5 rounded-lg bg-surface-card border border-hairline text-ink-secondary">
-                  {candidate.additional?.emergencyContacts || 'No emergency contact recorded'}
-                </p>
-              </div>
-              <div>
-                <span className="block text-xs text-ink-muted mb-1.5">Consultant notes</span>
-                <p className="p-3.5 rounded-lg bg-surface-card border border-hairline text-ink-secondary">
-                  {candidate.additional?.notes || 'No general notes recorded'}
-                </p>
-              </div>
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-ink-primary">Employment history</h3>
+              {candidate.employment.length === 0 ? (
+                <div className="p-8 rounded-xl bg-surface-deep border border-hairline text-center text-sm text-ink-muted">
+                  No employment records logged
+                </div>
+              ) : (
+                candidate.employment.map((emp, idx) => (
+                  <div key={emp.id || idx} className="p-5 rounded-xl bg-surface-deep border border-hairline">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-base font-medium text-ink-primary">{emp.jobTitle}</span>
+                      <span className="text-[13px] text-ink-secondary">{emp.company}</span>
+                    </div>
+                    <p className="text-xs text-ink-muted tabular-nums mt-1">
+                      {emp.startDate} — {emp.endDate || (emp.isCurrent ? 'Present' : '—')} · {emp.employmentType}
+                      {emp.location ? ` · ${emp.location}` : ''}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
