@@ -1449,13 +1449,19 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
                     {(app.casStatus || app.visaStatus || app.portalUrl) && (
                       <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted pt-1 border-t border-hairline">
                         {app.casStatus && (
-                          <span>
-                            CAS/I-20: <span className="font-mono text-ink-primary">{app.casStatus.replace(/_/g, ' ')}</span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span>CAS/I-20</span>
+                            <span className="font-medium text-ink-primary capitalize">
+                              {app.casStatus.replace(/_/g, ' ')}
+                            </span>
                           </span>
                         )}
                         {app.visaStatus && (
-                          <span>
-                            Visa: <span className="font-mono text-ink-primary">{app.visaStatus.replace(/_/g, ' ')}</span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span>Visa</span>
+                            <span className="font-medium text-ink-primary capitalize">
+                              {app.visaStatus.replace(/_/g, ' ')}
+                            </span>
                           </span>
                         )}
                         {app.portalUrl && (
@@ -1474,11 +1480,11 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
 
                     {app.timeline && app.timeline.length > 0 && (
                       <div className="pt-2 border-t border-hairline space-y-1.5">
-                        <span className="text-[11px] font-mono text-ink-muted">Recent activity</span>
+                        <span className="text-xs font-medium text-ink-muted">Recent activity</span>
                         {app.timeline.slice(0, 3).map((ev) => (
                           <div key={ev.id} className="text-xs flex items-start justify-between gap-2">
                             <span className="text-ink-secondary">{ev.text}</span>
-                            <span className="font-mono text-[11px] text-ink-muted shrink-0">
+                            <span className="text-[11px] tabular-nums text-ink-muted shrink-0">
                               {ev.actor ? `${ev.actor} · ` : ''}
                               {new Date(ev.timestamp).toLocaleDateString()}
                             </span>

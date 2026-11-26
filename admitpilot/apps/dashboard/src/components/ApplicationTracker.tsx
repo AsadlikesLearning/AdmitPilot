@@ -539,24 +539,56 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
         return (
           <div className="px-4 py-2.5 rounded-xl bg-surface-card border border-hairline flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex flex-wrap items-center gap-4">
-              <span className="text-ink-muted">
-                Deposits:{' '}
-                <span className="font-mono text-tone-positive">{depositsPaid} paid</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-ink-muted font-medium">Deposits</span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-deep border border-hairline text-ink-secondary">
+                  <span className="w-1.5 h-1.5 rounded-full bg-tone-positive" />
+                  <span className="font-medium tabular-nums text-ink-primary">{depositsPaid}</span>
+                  <span>paid</span>
+                </span>
                 {depositsPending > 0 && (
-                  <span className="font-mono text-brass"> · {depositsPending} due</span>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-brass-soft border border-brass-border text-ink-primary">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brass" />
+                    <span className="font-medium tabular-nums">{depositsPending}</span>
+                    <span>due</span>
+                  </span>
                 )}
-              </span>
-              <span className="text-ink-muted">
-                Scholarships:{' '}
-                <span className="font-mono text-ink-primary">{scholarshipsAwarded} awarded</span>
-              </span>
+              </div>
+
+              <div className="h-3.5 w-px bg-hairline hidden sm:block" />
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-ink-muted font-medium">Scholarships</span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-deep border border-hairline text-ink-secondary">
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-secondary" />
+                  <span className="font-medium tabular-nums text-ink-primary">
+                    {scholarshipsAwarded}
+                  </span>
+                  <span>awarded</span>
+                </span>
+              </div>
             </div>
+
             {isOrgAdmin && (
-              <div className="flex flex-wrap items-center gap-3 font-mono">
-                <span className="text-ink-muted">Commissions:</span>
-                <span className="text-brass">{commPending} pending</span>
-                <span className="text-ink-primary">{commInvoiced} invoiced</span>
-                <span className="text-tone-positive">{commReceived} received</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-ink-muted font-medium">Commissions</span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-brass-soft border border-brass-border text-ink-primary">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brass" />
+                  <span className="font-medium tabular-nums">{commPending}</span>
+                  <span>pending</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-deep border border-hairline text-ink-secondary">
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-secondary" />
+                  <span className="font-medium tabular-nums text-ink-primary">{commInvoiced}</span>
+                  <span>invoiced</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-deep border border-hairline text-ink-secondary">
+                  <span className="w-1.5 h-1.5 rounded-full bg-tone-positive" />
+                  <span className="font-medium tabular-nums text-tone-positive">
+                    {commReceived}
+                  </span>
+                  <span>received</span>
+                </span>
               </div>
             )}
           </div>
@@ -1939,7 +1971,7 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
                                 <p className="text-xs font-medium text-ink-primary truncate">
                                   {prog.name}
                                 </p>
-                                <p className="text-[11px] font-mono text-ink-muted truncate">
+                                <p className="text-xs text-ink-muted truncate mt-0.5">
                                   {prog.degreeLevel}
                                   {prog.intake ? ` · ${prog.intake}` : ''}
                                   {prog.tuitionFee ? ` · ${prog.tuitionFee}` : ''}
@@ -1981,8 +2013,11 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
               </div>
 
               <div className="px-6 py-4 border-t border-hairline flex items-center justify-between gap-3 shrink-0">
-                <span className="text-xs font-mono text-ink-muted">
-                  {shortlistSelectedKeys.length} program{shortlistSelectedKeys.length === 1 ? '' : 's'} selected
+                <span className="text-xs text-ink-muted">
+                  <span className="font-medium tabular-nums text-ink-primary">
+                    {shortlistSelectedKeys.length}
+                  </span>{' '}
+                  program{shortlistSelectedKeys.length === 1 ? '' : 's'} selected
                 </span>
                 <div className="flex items-center gap-2">
                   <button
