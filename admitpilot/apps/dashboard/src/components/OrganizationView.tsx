@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus,
   Search,
@@ -25,6 +25,7 @@ import {
 import { VerificationStamp, StampTone } from './ui/Primitives';
 
 interface OrganizationViewProps {
+  mode?: 'desks' | 'directory' | 'both';
   candidates: CandidateProfile[];
   applications?: ApplicationRecord[];
   members: UserProfile[];
@@ -98,6 +99,7 @@ function suggestCode(name: string): string {
 }
 
 export const OrganizationView: React.FC<OrganizationViewProps> = ({
+  mode = 'both',
   candidates,
   applications = [],
   members,
@@ -116,9 +118,17 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
   onSelectCandidateDossier,
   onOpenAgencySettings,
 }) => {
-  const [subView, setSubView] = useState<'desks' | 'directory'>('desks');
+  const [subView, setSubView] = useState<'desks' | 'directory'>(
+    mode === 'directory' ? 'directory' : 'desks'
+  );
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [deskAddSelection, setDeskAddSelection] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (mode === 'desks' || mode === 'directory') {
+      setSubView(mode);
+    }
+  }, [mode]);
 
   // Member modal state
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
@@ -276,65 +286,88 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
       .includes(q);
   });
 
+  const pageTitle =
+    mode === 'directory'
+      ? 'Team'
+      : mode === 'desks'
+        ? 'Country desks'
+        : 'Team & country desks';
+  const pageSubtitle =
+    mode === 'directory'
+      ? 'Manage consultant profiles, login credentials, and assigned student workloads'
+      : mode === 'desks'
+        ? 'Organize destination country desks and route student dossiers automatically'
+        : 'Organize consultants by destination country and route student dossiers automatically';
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-[28px] leading-[1.15] font-medium text-ink-primary tracking-[-0.015em]">
-            Team & country desks
+            {pageTitle}
           </h1>
-          <p className="text-sm text-ink-secondary mt-1.5">
-            Organize consultants by destination country and route student dossiers automatically
-          </p>
+          <p className="text-sm text-ink-secondary mt-1.5">{pageSubtitle}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {onOpenAgencySettings && (
+          {mode !== 'directory' && onOpenAgencySettings && (
             <button type="button" onClick={onOpenAgencySettings} className="btn-secondary">
               <SlidersHorizontal className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
               <span>Agency countries</span>
             </button>
           )}
-          <button type="button" onClick={() => openDeskModal()} className="btn-secondary">
-            <Globe className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
-            <span>New country desk</span>
-          </button>
-          <button type="button" onClick={() => openMemberModal()} className="btn-primary">
-            <UserPlus className="w-4 h-4 text-[#141415]" strokeWidth={1.5} />
-            <span>Add teammate</span>
-          </button>
+          {mode !== 'directory' && (
+            <button type="button" onClick={() => openDeskModal()} className="btn-secondary">
+              <Globe className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
+              <span>New country desk</span>
+            </button>
+          )}
+          {mode !== 'desks' && (
+            <button type="button" onClick={() => openMemberModal()} className="btn-primary">
+              <UserPlus className="w-4 h-4 text-[#141415]" strokeWidth={1.5} />
+              <span>Add teammate</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* View Switcher & Search */}
       <div className="p-3 rounded-xl bg-surface-card border border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setSubView('desks')}
-            className={`h-8 px-3 rounded-lg text-xs inline-flex items-center gap-2 transition-colors duration-150 ease-quart ${
-              subView === 'desks'
-                ? 'bg-surface-raised border border-hairline-strong text-ink-primary font-medium'
-                : 'text-ink-secondary hover:text-ink-primary border border-transparent'
-            }`}
-          >
-            <Globe className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
-            <span>Country desks ({countryTeams.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSubView('directory')}
-            className={`h-8 px-3 rounded-lg text-xs inline-flex items-center gap-2 transition-colors duration-150 ease-quart ${
-              subView === 'directory'
-                ? 'bg-surface-raised border border-hairline-strong text-ink-primary font-medium'
-                : 'text-ink-secondary hover:text-ink-primary border border-transparent'
-            }`}
-          >
-            <Users className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
-            <span>Team members ({members.length})</span>
-          </button>
-        </div>
+        {mode === 'both' ? (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSubView('desks')}
+              className={`h-8 px-3 rounded-lg text-xs inline-flex items-center gap-2 transition-colors duration-150 ease-quart ${
+                subView === 'desks'
+                  ? 'bg-surface-raised border border-hairline-strong text-ink-primary font-medium'
+                  : 'text-ink-secondary hover:text-ink-primary border border-transparent'
+              }`}
+            >
+              <Globe className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
+              <span>Country desks ({countryTeams.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubView('directory')}
+              className={`h-8 px-3 rounded-lg text-xs inline-flex items-center gap-2 transition-colors duration-150 ease-quart ${
+                subView === 'directory'
+                  ? 'bg-surface-raised border border-hairline-strong text-ink-primary font-medium'
+                  : 'text-ink-secondary hover:text-ink-primary border border-transparent'
+              }`}
+            >
+              <Users className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
+              <span>Team members ({members.length})</span>
+            </button>
+          </div>
+        ) : (
+          <div className="text-xs text-ink-secondary px-1">
+            {mode === 'directory'
+              ? `${members.length} team member${members.length === 1 ? '' : 's'} · click a teammate to inspect credentials & workload`
+              : `${countryTeams.length} country desk${countryTeams.length === 1 ? '' : 's'} active`}
+          </div>
+        )}
 
         <div className="relative w-full sm:w-64">
           <Search

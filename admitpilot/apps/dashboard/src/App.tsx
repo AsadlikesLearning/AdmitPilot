@@ -476,6 +476,7 @@ export const App: React.FC = () => {
         candidateCount={scopedCandidates.length}
         applicationCount={scopedApplications.length}
         teamCount={teamMembers.length}
+        countryTeamsCount={countryTeams.length}
         organizationName={organization?.name}
       />
 
@@ -659,8 +660,9 @@ export const App: React.FC = () => {
                   />
                 )}
 
-                {currentTab === 'organization' && (
+                {(currentTab === 'team' || currentTab === 'country-desks') && (
                   <OrganizationView
+                    mode={currentTab === 'team' ? 'directory' : 'desks'}
                     candidates={candidates}
                     applications={applications}
                     members={teamMembers}
@@ -680,7 +682,7 @@ export const App: React.FC = () => {
                       handleSelectCandidate(cand);
                       setCurrentTab('candidates');
                     }}
-                    onOpenAgencySettings={() => setCurrentTab('admin-profile')}
+                    onOpenAgencySettings={() => setCurrentTab('agency-settings')}
                   />
                 )}
 
@@ -688,8 +690,9 @@ export const App: React.FC = () => {
                   <AISettingsView settings={aiSettings} onSave={handleSaveAISettings} />
                 )}
 
-                {currentTab === 'admin-profile' && (
+                {(currentTab === 'agency-settings' || currentTab === 'admin-profile') && (
                   <AdminProfileView
+                    mode={currentTab === 'agency-settings' ? 'agency' : 'profile'}
                     currentUser={currentUser}
                     organization={organization}
                     countryTeams={countryTeams}
@@ -698,7 +701,7 @@ export const App: React.FC = () => {
                     onSaveProfile={handleSaveMyProfile}
                     onSaveOrganization={handleSaveOrganization}
                     onOpenModelProviders={() => setCurrentTab('ai-settings')}
-                    onOpenTeamDesks={() => setCurrentTab('organization')}
+                    onOpenTeamDesks={() => setCurrentTab('country-desks')}
                   />
                 )}
               </>

@@ -8,6 +8,7 @@ import {
   FlaskConical,
   Globe,
   UserCog,
+  Building2,
 } from 'lucide-react';
 
 export type NavTab =
@@ -16,8 +17,10 @@ export type NavTab =
   | 'documents'
   | 'applications'
   | 'testing'
-  | 'organization'
+  | 'team'
+  | 'country-desks'
   | 'ai-settings'
+  | 'agency-settings'
   | 'admin-profile';
 
 interface SidebarProps {
@@ -26,6 +29,7 @@ interface SidebarProps {
   candidateCount: number;
   applicationCount: number;
   teamCount?: number;
+  countryTeamsCount?: number;
   organizationName?: string;
 }
 
@@ -35,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   candidateCount,
   applicationCount,
   teamCount,
+  countryTeamsCount,
   organizationName,
 }) => {
   const primaryItems: Array<{ id: NavTab; label: string; icon: React.ComponentType<any>; count?: number }> = [
@@ -46,9 +51,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const workspaceItems: Array<{ id: NavTab; label: string; icon: React.ComponentType<any>; count?: number }> = [
-    { id: 'organization', label: 'Team & country desks', icon: Globe, count: teamCount },
+    { id: 'team', label: 'Team', icon: Users, count: teamCount },
+    { id: 'country-desks', label: 'Country desks', icon: Globe, count: countryTeamsCount },
     { id: 'ai-settings', label: 'Model providers', icon: SlidersHorizontal },
-    { id: 'admin-profile', label: 'Admin & settings', icon: UserCog },
+    { id: 'agency-settings', label: 'Agency settings', icon: Building2 },
+    { id: 'admin-profile', label: 'Admin profile', icon: UserCog },
   ];
 
   const renderRow = (item: { id: NavTab; label: string; icon: React.ComponentType<any>; count?: number }) => {

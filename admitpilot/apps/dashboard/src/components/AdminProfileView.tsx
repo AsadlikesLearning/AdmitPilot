@@ -11,6 +11,7 @@ import {
 import { VerificationStamp } from './ui/Primitives';
 
 interface AdminProfileViewProps {
+  mode?: 'agency' | 'profile' | 'both';
   currentUser: UserProfile | null;
   organization: Organization | null;
   countryTeams: CountryTeam[];
@@ -55,6 +56,7 @@ function initialsOf(name?: string): string {
 }
 
 export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
+  mode = 'both',
   currentUser,
   organization,
   countryTeams,
@@ -228,17 +230,28 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
     new Set([...POPULAR_DESTINATIONS, ...operatingCountries])
   );
 
+  const pageTitle =
+    mode === 'agency'
+      ? 'Agency settings'
+      : mode === 'profile'
+        ? 'Admin profile'
+        : 'Agency setup & admin profile';
+  const pageSubtitle =
+    mode === 'agency'
+      ? 'Configure your consultancy branding, destination countries, and dossier routing rules'
+      : mode === 'profile'
+        ? 'Manage your personal owner/consultant account, credential card, and alert preferences'
+        : 'Configure your consultancy branding, destination countries, routing rules, and owner account';
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-[28px] leading-[1.15] font-medium text-ink-primary tracking-[-0.015em]">
-            Agency setup & admin profile
+            {pageTitle}
           </h1>
-          <p className="text-sm text-ink-secondary mt-1.5">
-            Configure your consultancy branding, destination countries, routing rules, and owner account
-          </p>
+          <p className="text-sm text-ink-secondary mt-1.5">{pageSubtitle}</p>
         </div>
 
         <VerificationStamp
@@ -249,9 +262,10 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left 7 Columns: Agency Setup & Country Catalog (First) + Owner Profile */}
+        {/* Left 7 Columns */}
         <div className="lg:col-span-7 space-y-6">
           {/* 1. Agency Setup & Destination Countries */}
+          {mode !== 'profile' && (
           <form
             onSubmit={handleOrgSubmit}
             className="p-6 rounded-xl bg-surface-card border border-hairline space-y-5 text-sm"
@@ -455,8 +469,10 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
               </button>
             </div>
           </form>
+          )}
 
           {/* 2. Personal Owner / Admin Profile */}
+          {mode !== 'agency' && (
           <form
             onSubmit={handleProfileSubmit}
             className="p-6 rounded-xl bg-surface-card border border-hairline space-y-5 text-sm"
@@ -580,11 +596,13 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
               </button>
             </div>
           </form>
+          )}
         </div>
 
         {/* Right 5 Columns: Credential Card + Quick Launch Checklist + Notifications */}
         <div className="lg:col-span-5 space-y-5">
           {/* Officer Credential Card */}
+          {mode !== 'agency' && (
           <div className="rounded-xl bg-surface-card border border-brass-border overflow-hidden shadow-[inset_0_1px_0_rgba(212,168,83,0.14)]">
             <div className="px-5 py-3.5 border-b border-[rgba(212,168,83,0.14)] flex items-center justify-between">
               <span className="font-mono text-xs text-brass">Agency owner credential</span>
@@ -628,8 +646,10 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
               </div>
             </div>
           </div>
+          )}
 
           {/* Agency Launch Checklist */}
+          {mode !== 'profile' && (
           <div className="p-5 rounded-xl bg-surface-card border border-hairline space-y-3">
             <h3 className="text-sm font-medium text-ink-primary">Workspace setup checklist</h3>
             <div className="space-y-2.5 text-xs">
@@ -677,8 +697,10 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
               ))}
             </div>
           </div>
+          )}
 
           {/* Notifications */}
+          {mode !== 'agency' && (
           <div className="p-5 rounded-xl bg-surface-card border border-hairline space-y-3">
             <h3 className="text-sm font-medium text-ink-primary">Workspace notifications</h3>
             <div className="divide-y divide-[rgba(237,237,237,0.06)] text-xs">
@@ -718,6 +740,7 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
               })}
             </div>
           </div>
+          )}
 
           <div className="flex gap-2">
             <button
@@ -726,7 +749,7 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
               className="btn-secondary flex-1 text-xs h-9"
             >
               <Globe className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
-              <span>Team & country desks</span>
+              <span>Country desks</span>
             </button>
             <button
               type="button"
