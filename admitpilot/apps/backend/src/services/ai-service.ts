@@ -14,6 +14,7 @@ export interface CompletionOptions {
   jsonMode?: boolean;
   maxTokens?: number;
   inlineMedia?: { mimeType: string; base64Data: string };
+  inlineMediaList?: Array<{ mimeType: string; base64Data: string }>;
   overrideSettings?: Partial<AISettings>;
 }
 
@@ -249,14 +250,23 @@ export class AIService {
         generationConfig.maxOutputTokens = opts.maxTokens;
       }
 
+      const mediaAttachments =
+        opts.inlineMediaList && opts.inlineMediaList.length > 0
+          ? opts.inlineMediaList
+          : opts.inlineMedia?.base64Data && opts.inlineMedia?.mimeType
+          ? [opts.inlineMedia]
+          : [];
+
       const userParts: any[] = [];
-      if (opts.inlineMedia?.base64Data && opts.inlineMedia?.mimeType) {
-        userParts.push({
-          inlineData: {
-            mimeType: opts.inlineMedia.mimeType,
-            data: opts.inlineMedia.base64Data,
-          },
-        });
+      for (const media of mediaAttachments) {
+        if (media?.base64Data && media?.mimeType) {
+          userParts.push({
+            inlineData: {
+              mimeType: media.mimeType,
+              data: media.base64Data,
+            },
+          });
+        }
       }
       userParts.push({ text: prompt });
 
@@ -347,20 +357,27 @@ export class AIService {
         );
       }
 
+      const mediaAttachments =
+        opts.inlineMediaList && opts.inlineMediaList.length > 0
+          ? opts.inlineMediaList
+          : opts.inlineMedia?.base64Data && opts.inlineMedia?.mimeType
+          ? [opts.inlineMedia]
+          : [];
+
       const isReasoner = /reasoner|\br1\b/i.test(effectiveModel);
       const supportsVision =
-        Boolean(opts.inlineMedia?.base64Data) &&
+        mediaAttachments.length > 0 &&
         /gpt-4o|gemini|claude-3|vision|pixtral|qwen.*vl/i.test(effectiveModel);
 
       const userContent: any = supportsVision
         ? [
             { type: 'text', text: prompt },
-            {
+            ...mediaAttachments.map((media) => ({
               type: 'image_url',
               image_url: {
-                url: `data:${opts.inlineMedia!.mimeType};base64,${opts.inlineMedia!.base64Data}`,
+                url: `data:${media.mimeType};base64,${media.base64Data}`,
               },
-            },
+            })),
           ]
         : prompt;
 
@@ -491,10 +508,16 @@ export class AIService {
   async extractDocumentFields(
     rawText: string,
     category: DocumentCategory,
-    inlineMedia?: { mimeType: string; base64Data: string }
+    inlineMedia?: { mimeType: string; base64Data: string } | Array<{ mimeType: string; base64Data: string }>
   ): Promise<{ fields: Record<string, any>; usedVision: boolean } | null> {
+    const mediaList = Array.isArray(inlineMedia)
+      ? inlineMedia
+      : inlineMedia?.base64Data
+      ? [inlineMedia]
+      : [];
+
     const canUseVision =
-      Boolean(inlineMedia?.base64Data) &&
+      mediaList.length > 0 &&
       (this.settings.provider === 'gemini' ||
         ((this.settings.provider === 'openrouter' || this.settings.provider === 'openai_compatible') &&
           /gpt-4o|gemini|claude-3|vision|pixtral|qwen.*vl/i.test(this.settings.model))) &&
@@ -535,16 +558,16 @@ Return STRICT JSON matching: ${hint}`;
 
     try {
       const promptBody = canUseVision
-        ? `Extract structured fields from this ${category} image.${
-            rawText ? `\n\nSupplemental OCR text:\n${rawText.slice(0, 4000)}` : ''
-          }`
+        ? `Extract structured fields from this ${category} document (${mediaList.length} scanned page${
+            mediaList.length === 1 ? '' : 's'
+          }).${rawText ? `\n\nSupplemental OCR text:\n${rawText.slice(0, 5000)}` : ''}`
         : `Document Text (${category}):\n${rawText.slice(0, 7000)}`;
 
       const raw = await this.complete(promptBody, {
         systemPrompt,
         jsonMode: true,
         maxTokens: 1500,
-        inlineMedia: canUseVision ? inlineMedia : undefined,
+        inlineMediaList: canUseVision ? mediaList : undefined,
       });
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return null;

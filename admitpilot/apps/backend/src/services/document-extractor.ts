@@ -23,7 +23,7 @@ export interface ExtractionOutput {
   ocrApplied: boolean;
   mrzDetected: boolean;
   extractionMethod: 'text' | 'ocr' | 'mrz+text' | 'ai_vision' | 'hybrid_ai';
-  inlineMedia?: { mimeType: string; base64Data: string };
+  inlineMedia?: Array<{ mimeType: string; base64Data: string }>;
 }
 
 export const FIELD_TARGET_MAP: Record<string, { targetPath: string; label: string }> = {
@@ -178,7 +178,7 @@ export class DocumentExtractorService {
     let rawText = '';
     let preserveLineText = '';
     let ocrApplied = false;
-    let inlineMedia: { mimeType: string; base64Data: string } | undefined;
+    let inlineMedia: Array<{ mimeType: string; base64Data: string }> | undefined;
 
     const ext = path.extname(originalName).toLowerCase();
 
@@ -224,18 +224,24 @@ export class DocumentExtractorService {
         }
       }
 
-      // Scanned image-only PDF fallback: extract embedded JPEG page scan for Vision AI + Tesseract OCR
+      // Scanned image-only PDF fallback: extract up to 3 embedded JPEG page scans for Vision AI + Tesseract OCR
       if (rawText.trim().length < 40) {
-        const embeddedJpeg = this.extractLargestPdfJpeg(dataBuffer);
-        if (embeddedJpeg) {
-          if (embeddedJpeg.byteLength <= 10 * 1024 * 1024) {
-            inlineMedia = {
-              mimeType: 'image/jpeg',
-              base64Data: embeddedJpeg.toString('base64'),
-            };
+        const embeddedJpegs = this.extractPdfJpegs(dataBuffer, 3);
+        if (embeddedJpegs.length > 0) {
+          const mediaList: Array<{ mimeType: string; base64Data: string }> = [];
+          for (const jpg of embeddedJpegs) {
+            if (jpg.byteLength <= 10 * 1024 * 1024) {
+              mediaList.push({
+                mimeType: 'image/jpeg',
+                base64Data: jpg.toString('base64'),
+              });
+            }
+          }
+          if (mediaList.length > 0) {
+            inlineMedia = mediaList;
           }
           try {
-            const ocrText = await this.performOCR(embeddedJpeg);
+            const ocrText = await this.performOCRBatch(embeddedJpegs);
             if (ocrText.trim().length > rawText.trim().length) {
               preserveLineText = ocrText;
               rawText = ocrText;
@@ -258,10 +264,12 @@ export class DocumentExtractorService {
               : ext === '.webp'
               ? 'image/webp'
               : 'image/jpeg';
-          inlineMedia = {
-            mimeType: resolvedMime,
-            base64Data: imgBuf.toString('base64'),
-          };
+          inlineMedia = [
+            {
+              mimeType: resolvedMime,
+              base64Data: imgBuf.toString('base64'),
+            },
+          ];
         }
       } catch {
         // ignore
@@ -316,10 +324,11 @@ export class DocumentExtractorService {
   }
 
   /**
-   * Extracts the largest embedded JPEG stream (/DCTDecode) from a scanned image-only PDF.
+   * Extracts embedded JPEG page scans (/DCTDecode) from single or multi-page scanned PDFs,
+   * filtering out tiny logo/icon thumbnails and keeping up to `maxPages` largest scans in page order.
    */
-  private extractLargestPdfJpeg(pdfBuffer: Buffer): Buffer | null {
-    const jpegs: Buffer[] = [];
+  private extractPdfJpegs(pdfBuffer: Buffer, maxPages = 3): Buffer[] {
+    const entries: Array<{ offset: number; buf: Buffer }> = [];
     const soi = Buffer.from([0xff, 0xd8, 0xff]);
     const eoi = Buffer.from([0xff, 0xd9]);
     const endStreamToken = Buffer.from('endstream', 'latin1');
@@ -331,26 +340,46 @@ export class DocumentExtractorService {
       const slice = pdfBuffer.subarray(pos, searchLimit);
       const eoiIdx = slice.lastIndexOf(eoi);
       if (eoiIdx > 1024) {
-        jpegs.push(Buffer.from(slice.subarray(0, eoiIdx + 2)));
+        const jpg = Buffer.from(slice.subarray(0, eoiIdx + 2));
+        entries.push({ offset: pos, buf: jpg });
         pos += eoiIdx + 2;
       } else {
         pos += 3;
       }
     }
 
-    if (jpegs.length === 0) return null;
-    jpegs.sort((a, b) => b.byteLength - a.byteLength);
-    return jpegs[0];
+    if (entries.length === 0) return [];
+    // Filter out small embedded logos/stamps (< 18 KB) when larger page scans exist
+    const pageScans = entries.filter((e) => e.buf.byteLength >= 18 * 1024);
+    const pool = pageScans.length > 0 ? pageScans : entries;
+    // Keep top `maxPages` by size, then restore original PDF page order
+    const selected = [...pool]
+      .sort((a, b) => b.buf.byteLength - a.buf.byteLength)
+      .slice(0, maxPages)
+      .sort((a, b) => a.offset - b.offset);
+    return selected.map((e) => e.buf);
   }
 
-  private async performOCR(source: string | Buffer): Promise<string> {
+  private async performOCRBatch(sources: Array<string | Buffer>): Promise<string> {
+    if (sources.length === 0) return '';
     const worker = await createWorker('eng');
     try {
-      const ret = await worker.recognize(source);
-      return ret.data.text || '';
+      const chunks: string[] = [];
+      for (let i = 0; i < sources.length; i++) {
+        const ret = await worker.recognize(sources[i]);
+        const txt = (ret.data.text || '').trim();
+        if (txt) {
+          chunks.push(sources.length > 1 ? `--- Page ${i + 1} ---\n${txt}` : txt);
+        }
+      }
+      return chunks.join('\n\n');
     } finally {
       await worker.terminate();
     }
+  }
+
+  private async performOCR(source: string | Buffer): Promise<string> {
+    return this.performOCRBatch([source]);
   }
 
   public detectCategory(text: string, filename: string): DocumentCategory {
