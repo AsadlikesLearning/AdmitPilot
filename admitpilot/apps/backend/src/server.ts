@@ -251,6 +251,39 @@ const INTAKE_CHECKLIST_SPEC: Array<{
   },
 ];
 
+const INTAKE_LINK_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const PUBLIC_UPLOAD_MAX_BYTES = 12 * 1024 * 1024;
+const PUBLIC_UPLOAD_MAX_FILES = 5;
+const PUBLIC_ALLOWED_EXTS = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.webp']);
+const PUBLIC_ALLOWED_MIMES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+]);
+
+// Lightweight in-memory sliding-window rate limiter for public intake portal endpoints
+const publicRateBuckets = new Map<string, number[]>();
+function checkPublicRateLimit(key: string, maxRequests: number, windowMs: number): boolean {
+  const now = Date.now();
+  const cutoff = now - windowMs;
+  const recent = (publicRateBuckets.get(key) || []).filter((ts) => ts > cutoff);
+  if (recent.length >= maxRequests) {
+    publicRateBuckets.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  publicRateBuckets.set(key, recent);
+  return true;
+}
+
+function isIntakeLinkExpired(candidate: CandidateProfile): boolean {
+  if (!candidate.intakeShareExpiresAt) return false;
+  const ts = new Date(candidate.intakeShareExpiresAt).getTime();
+  return Number.isFinite(ts) && Date.now() > ts;
+}
+
 function buildPublicIntakePortalInfo(
   candidate: CandidateProfile,
   documents: CandidateDocument[],
@@ -288,16 +321,56 @@ function buildPublicIntakePortalInfo(
     totalUploaded: documents.length,
     requiredCompleted,
     requiredTotal: requiredItems.length,
+    expiresAt: candidate.intakeShareExpiresAt,
+    pinProtected: Boolean(candidate.intakeSharePin),
   };
 }
 
 app.get('/api/intake-portal/:token', async (req, res) => {
   try {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!checkPublicRateLimit(`get:${ip}`, 30, 60 * 1000)) {
+      return res.status(429).json({ error: 'Too many requests. Please wait a minute and try again.' });
+    }
+
     const token = String(req.params.token || '').trim();
     const match = await store.findCandidateByIntakeToken(token);
     if (!match) {
       return res.status(404).json({ error: 'This upload link is invalid or has been revoked.' });
     }
+    if (isIntakeLinkExpired(match.candidate)) {
+      return res.status(410).json({
+        error: 'This upload link has expired (14-day limit). Please request a new link from your consultant.',
+      });
+    }
+
+    const expectedPin = match.candidate.intakeSharePin;
+    if (expectedPin) {
+      const providedPin = String(req.headers['x-intake-pin'] || '').trim();
+      if (!providedPin) {
+        return res.status(401).json({
+          pinRequired: true,
+          agencyName: match.organizationName,
+          candidateFirstName: match.candidate.personal.legalGivenName || 'Student',
+          error: 'Access PIN required',
+        });
+      }
+      if (!checkPublicRateLimit(`pin:${ip}:${token}`, 10, 10 * 60 * 1000)) {
+        return res.status(429).json({
+          pinRequired: true,
+          error: 'Too many PIN attempts. Please wait 10 minutes before trying again.',
+        });
+      }
+      if (providedPin !== expectedPin) {
+        return res.status(401).json({
+          pinRequired: true,
+          agencyName: match.organizationName,
+          candidateFirstName: match.candidate.personal.legalGivenName || 'Student',
+          error: 'Incorrect 4-digit access PIN.',
+        });
+      }
+    }
+
     store.setContext({ organizationId: match.candidate.organizationId });
     const docs = await store.listDocuments(match.candidate.id);
     res.json(buildPublicIntakePortalInfo(match.candidate, docs, match.organizationName));
@@ -308,16 +381,66 @@ app.get('/api/intake-portal/:token', async (req, res) => {
 });
 
 app.post('/api/intake-portal/:token/upload', upload.any(), async (req, res) => {
+  const uploadedFiles = (req.files as Express.Multer.File[]) || (req.file ? [req.file] : []);
+  const cleanupFiles = async () => {
+    for (const f of uploadedFiles) {
+      if (f?.path) await fs.promises.unlink(f.path).catch(() => {});
+    }
+  };
+
   try {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
     const token = String(req.params.token || '').trim();
-    const match = await store.findCandidateByIntakeToken(token);
-    if (!match) {
-      return res.status(404).json({ error: 'This upload link is invalid or has been revoked.' });
+    if (!checkPublicRateLimit(`upload:${ip}:${token}`, 10, 10 * 60 * 1000)) {
+      await cleanupFiles();
+      return res.status(429).json({ error: 'Upload rate limit reached. Please wait a few minutes.' });
     }
 
-    const uploadedFiles = (req.files as Express.Multer.File[]) || (req.file ? [req.file] : []);
+    const match = await store.findCandidateByIntakeToken(token);
+    if (!match) {
+      await cleanupFiles();
+      return res.status(404).json({ error: 'This upload link is invalid or has been revoked.' });
+    }
+    if (isIntakeLinkExpired(match.candidate)) {
+      await cleanupFiles();
+      return res.status(410).json({
+        error: 'This upload link has expired (14-day limit). Please request a new link from your consultant.',
+      });
+    }
+
+    if (match.candidate.intakeSharePin) {
+      const providedPin = String(req.headers['x-intake-pin'] || '').trim();
+      if (providedPin !== match.candidate.intakeSharePin) {
+        await cleanupFiles();
+        return res.status(401).json({ pinRequired: true, error: 'Invalid or missing access PIN.' });
+      }
+    }
+
     if (!uploadedFiles.length) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+    if (uploadedFiles.length > PUBLIC_UPLOAD_MAX_FILES) {
+      await cleanupFiles();
+      return res.status(400).json({
+        error: `You can upload up to ${PUBLIC_UPLOAD_MAX_FILES} files at once.`,
+      });
+    }
+
+    for (const f of uploadedFiles) {
+      const ext = path.extname(f.originalname || '').toLowerCase();
+      const mime = (f.mimetype || '').toLowerCase();
+      if (!PUBLIC_ALLOWED_EXTS.has(ext) || (mime && !PUBLIC_ALLOWED_MIMES.has(mime))) {
+        await cleanupFiles();
+        return res.status(400).json({
+          error: `Unsupported file type "${f.originalname}". Only PDF, PNG, JPG, and WEBP files are accepted.`,
+        });
+      }
+      if (f.size > PUBLIC_UPLOAD_MAX_BYTES) {
+        await cleanupFiles();
+        return res.status(400).json({
+          error: `File "${f.originalname}" exceeds the 12 MB size limit.`,
+        });
+      }
     }
 
     store.setContext({ organizationId: match.candidate.organizationId });
@@ -344,6 +467,7 @@ app.post('/api/intake-portal/:token/upload', upload.any(), async (req, res) => {
       portal: buildPublicIntakePortalInfo(updatedCandidate, allDocs, match.organizationName),
     });
   } catch (err: any) {
+    await cleanupFiles();
     console.error('Public intake portal upload failed:', err);
     res.status(500).json({ error: err.message || 'Upload failed' });
   }
@@ -1091,7 +1215,7 @@ app.post('/api/candidates/:id/documents/upload', upload.any(), async (req, res) 
   }
 });
 
-// Generate or retrieve shareable client intake upload link
+// Generate, update PIN, or retrieve shareable client intake upload link
 app.post('/api/candidates/:id/intake-link', async (req, res) => {
   try {
     const candidateId = req.params.id as string;
@@ -1099,21 +1223,31 @@ app.post('/api/candidates/:id/intake-link', async (req, res) => {
     if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
 
     const regenerate = Boolean(req.body?.regenerate);
-    if (!candidate.intakeShareToken || regenerate) {
-      candidate.intakeShareToken = crypto.randomBytes(18).toString('base64url');
-      candidate.intakeShareCreatedAt = new Date().toISOString();
-      const updatedCandidate = await store.saveCandidate(candidate);
-      return res.json({
-        token: updatedCandidate.intakeShareToken,
-        createdAt: updatedCandidate.intakeShareCreatedAt,
-        updatedCandidate,
-      });
+    const hasPinField = Object.prototype.hasOwnProperty.call(req.body || {}, 'pin');
+    const requestedPin = hasPinField ? String(req.body?.pin || '').trim() : undefined;
+    if (requestedPin && !/^\d{4}$/.test(requestedPin)) {
+      return res.status(400).json({ error: 'Access PIN must be exactly 4 digits.' });
     }
 
+    let changed = false;
+    if (!candidate.intakeShareToken || regenerate || isIntakeLinkExpired(candidate)) {
+      candidate.intakeShareToken = crypto.randomBytes(18).toString('base64url');
+      candidate.intakeShareCreatedAt = new Date().toISOString();
+      candidate.intakeShareExpiresAt = new Date(Date.now() + INTAKE_LINK_TTL_MS).toISOString();
+      changed = true;
+    }
+    if (hasPinField) {
+      candidate.intakeSharePin = requestedPin || undefined;
+      changed = true;
+    }
+
+    const updatedCandidate = changed ? await store.saveCandidate(candidate) : candidate;
     res.json({
-      token: candidate.intakeShareToken,
-      createdAt: candidate.intakeShareCreatedAt,
-      updatedCandidate: candidate,
+      token: updatedCandidate.intakeShareToken,
+      createdAt: updatedCandidate.intakeShareCreatedAt,
+      expiresAt: updatedCandidate.intakeShareExpiresAt,
+      pin: updatedCandidate.intakeSharePin,
+      updatedCandidate,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1128,6 +1262,8 @@ app.delete('/api/candidates/:id/intake-link', async (req, res) => {
 
     candidate.intakeShareToken = undefined;
     candidate.intakeShareCreatedAt = undefined;
+    candidate.intakeShareExpiresAt = undefined;
+    candidate.intakeSharePin = undefined;
     const updatedCandidate = await store.saveCandidate(candidate);
     res.json({ updatedCandidate });
   } catch (err: any) {

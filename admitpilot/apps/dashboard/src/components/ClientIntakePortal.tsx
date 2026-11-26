@@ -7,6 +7,7 @@ import {
   FileText,
   AlertCircle,
   Loader2,
+  Lock,
 } from 'lucide-react';
 import { DocumentCategory, PublicIntakePortalInfo } from 'admitpilot-shared';
 import { api } from '../api';
@@ -19,19 +20,34 @@ export const ClientIntakePortal: React.FC<ClientIntakePortalProps> = ({ token })
   const [portal, setPortal] = useState<PublicIntakePortalInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pinRequired, setPinRequired] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [activePin, setActivePin] = useState<string | undefined>(undefined);
+  const [gateMeta, setGateMeta] = useState<{ agencyName?: string; firstName?: string }>({});
   const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingCategory, setPendingCategory] = useState<DocumentCategory | 'auto'>('auto');
 
-  const loadPortal = async () => {
+  const loadPortal = async (pinToUse?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getPublicIntakePortal(token);
+      const data = await api.getPublicIntakePortal(token, pinToUse);
       setPortal(data);
+      setPinRequired(false);
+      if (pinToUse) setActivePin(pinToUse);
     } catch (err: any) {
-      setError(err.message || 'This upload link is invalid or has been revoked.');
+      if (err?.pinRequired) {
+        setPinRequired(true);
+        setGateMeta({ agencyName: err.agencyName, firstName: err.candidateFirstName });
+        if (pinToUse) {
+          setError(err.message || 'Incorrect 4-digit PIN.');
+        }
+      } else {
+        setPinRequired(false);
+        setError(err.message || 'This upload link is invalid or has been revoked.');
+      }
     } finally {
       setLoading(false);
     }
@@ -40,6 +56,16 @@ export const ClientIntakePortal: React.FC<ClientIntakePortalProps> = ({ token })
   useEffect(() => {
     loadPortal();
   }, [token]);
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleaned = pinInput.trim();
+    if (!/^\d{4}$/.test(cleaned)) {
+      setError('Please enter the 4-digit access PIN.');
+      return;
+    }
+    loadPortal(cleaned);
+  };
 
   const handleTriggerUpload = (category: DocumentCategory | 'auto') => {
     setPendingCategory(category);
@@ -54,7 +80,7 @@ export const ClientIntakePortal: React.FC<ClientIntakePortalProps> = ({ token })
     setError(null);
     setUploadNotice(null);
     try {
-      const res = await api.uploadPublicIntakeDocument(token, list, pendingCategory);
+      const res = await api.uploadPublicIntakeDocument(token, list, pendingCategory, activePin);
       setPortal(res.portal);
       setUploadNotice(
         `${res.uploadedCount} ${res.uploadedCount === 1 ? 'file' : 'files'} uploaded and sent to your consultant for verification.`
@@ -98,7 +124,7 @@ export const ClientIntakePortal: React.FC<ClientIntakePortalProps> = ({ token })
               <path d="M7 11h6M7 13.5h4" />
             </svg>
             <span className="text-base font-medium text-ink-primary">
-              {portal?.agencyName || 'AdmitPilot'}
+              {portal?.agencyName || gateMeta.agencyName || 'AdmitPilot'}
             </span>
           </div>
           <span className="inline-flex items-center gap-1.5 text-xs text-ink-secondary">
@@ -112,6 +138,46 @@ export const ClientIntakePortal: React.FC<ClientIntakePortalProps> = ({ token })
             <Loader2 className="w-4 h-4 animate-spin text-brass" strokeWidth={1.5} />
             <span>Loading your document checklist...</span>
           </div>
+        ) : pinRequired && !portal ? (
+          <form
+            onSubmit={handlePinSubmit}
+            className="max-w-md mx-auto p-6 rounded-2xl bg-surface-card border border-hairline space-y-4"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-brass-soft border border-brass-border flex items-center justify-center">
+                <Lock className="w-4 h-4 text-brass" strokeWidth={1.5} />
+              </div>
+              <div>
+                <h1 className="text-base font-medium text-ink-primary">Enter 4-digit access PIN</h1>
+                <p className="text-xs text-ink-secondary">
+                  {gateMeta.firstName
+                    ? `Hi ${gateMeta.firstName}, enter the PIN shared by your consultant.`
+                    : 'Enter the PIN shared by your admissions consultant.'}
+                </p>
+              </div>
+            </div>
+
+            {error && (
+              <div className="px-3 py-2 rounded-lg bg-tone-negative/10 border border-tone-negative/30 text-xs text-tone-negative">
+                {error}
+              </div>
+            )}
+
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="4-digit PIN"
+              autoFocus
+              className="field-input font-mono text-center tracking-[0.35em] text-base"
+            />
+
+            <button type="submit" className="btn-primary w-full">
+              Unlock document checklist
+            </button>
+          </form>
         ) : error && !portal ? (
           <div className="p-8 rounded-2xl bg-surface-card border border-hairline text-center space-y-3">
             <AlertCircle className="w-8 h-8 text-tone-negative mx-auto" strokeWidth={1.5} />
@@ -127,12 +193,19 @@ export const ClientIntakePortal: React.FC<ClientIntakePortalProps> = ({ token })
             <div className="p-6 rounded-2xl bg-surface-card border border-hairline space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div>
-                  <span className="text-xs text-brass font-medium">Student document intake</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-brass font-medium">Student document intake</span>
+                    {portal.expiresAt && (
+                      <span className="text-[11px] text-ink-muted">
+                        · Expires {new Date(portal.expiresAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
                   <h1 className="text-2xl font-medium text-ink-primary mt-1">
                     {portal.candidateFullName}
                   </h1>
                   <p className="text-sm text-ink-secondary mt-1">
-                    Upload clear scans or PDFs below. Files are verified automatically and routed to{' '}
+                    Upload clear scans or PDFs below (max 12 MB per file). Files are verified automatically and routed to{' '}
                     <span className="text-ink-primary font-medium">{portal.agencyName}</span>.
                   </p>
                   {(portal.targetCountries.length > 0 || portal.targetIntake) && (
@@ -212,7 +285,7 @@ export const ClientIntakePortal: React.FC<ClientIntakePortalProps> = ({ token })
             <div className="rounded-2xl bg-surface-card border border-hairline overflow-hidden">
               <div className="px-6 py-4 border-b border-hairline flex items-center justify-between">
                 <h2 className="text-sm font-medium text-ink-primary">Document checklist</h2>
-                <span className="text-xs text-ink-muted">PDF, PNG, or JPG</span>
+                <span className="text-xs text-ink-muted">PDF, PNG, JPG, or WEBP (max 12 MB)</span>
               </div>
 
               <div className="divide-y divide-hairline">

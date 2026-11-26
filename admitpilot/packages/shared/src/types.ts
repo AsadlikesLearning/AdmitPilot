@@ -266,6 +266,8 @@ export interface CandidateProfile {
   payments?: CandidatePayment[];
   intakeShareToken?: string;
   intakeShareCreatedAt?: string;
+  intakeShareExpiresAt?: string;
+  intakeSharePin?: string;
 
   // Metadata for auditing & verification
   evidence: Record<string, FieldEvidence>;
@@ -293,6 +295,8 @@ export interface PublicIntakePortalInfo {
   totalUploaded: number;
   requiredCompleted: number;
   requiredTotal: number;
+  expiresAt?: string;
+  pinProtected?: boolean;
 }
 
 export interface ExtractedFieldMeta {

@@ -144,6 +144,7 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [sharePinDraft, setSharePinDraft] = useState(candidate.intakeSharePin || '');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const shareUrl = candidate.intakeShareToken
@@ -153,6 +154,7 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
   const handleOpenShareModal = async () => {
     setIsShareModalOpen(true);
     setShareError(null);
+    setSharePinDraft(candidate.intakeSharePin || '');
     if (!candidate.intakeShareToken) {
       setShareLoading(true);
       try {
@@ -163,6 +165,20 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
       } finally {
         setShareLoading(false);
       }
+    }
+  };
+
+  const handleSaveSharePin = async (pinValue: string) => {
+    setShareLoading(true);
+    setShareError(null);
+    try {
+      const res = await api.createIntakeLink(candidate.id, false, pinValue);
+      setSharePinDraft(res.pin || '');
+      onCandidateUpdated?.(res.updatedCandidate);
+    } catch (err: any) {
+      setShareError(err.message || 'Could not update access PIN');
+    } finally {
+      setShareLoading(false);
     }
   };
 
@@ -2069,6 +2085,60 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
                         <span>{copiedKey === 'share-url' ? 'Copied' : 'Copy link'}</span>
                       </button>
                     </div>
+                    {candidate.intakeShareExpiresAt && (
+                      <p className="text-[11px] text-ink-muted mt-1.5">
+                        14-day link · Expires{' '}
+                        {new Date(candidate.intakeShareExpiresAt).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Optional 4-digit Access PIN */}
+                  <div className="p-3.5 rounded-xl bg-surface-deep border border-hairline space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-xs font-medium text-ink-primary">
+                        Optional 4-digit access PIN
+                      </label>
+                      {candidate.intakeSharePin ? (
+                        <span className="text-[11px] text-tone-positive font-medium">
+                          PIN active ({candidate.intakeSharePin})
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-ink-muted">No PIN set</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={4}
+                        value={sharePinDraft}
+                        onChange={(e) =>
+                          setSharePinDraft(e.target.value.replace(/\D/g, '').slice(0, 4))
+                        }
+                        placeholder="e.g. 4829"
+                        className="field-input font-mono text-xs w-32"
+                      />
+                      <button
+                        type="button"
+                        disabled={
+                          sharePinDraft.length > 0 && sharePinDraft.length !== 4
+                        }
+                        onClick={() => handleSaveSharePin(sharePinDraft)}
+                        className="btn-secondary text-xs"
+                      >
+                        {candidate.intakeSharePin ? 'Update PIN' : 'Set PIN'}
+                      </button>
+                      {candidate.intakeSharePin && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveSharePin('')}
+                          className="btn-secondary text-xs text-ink-muted"
+                        >
+                          Remove PIN
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -2076,7 +2146,9 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
                       type="button"
                       onClick={() =>
                         copyText(
-                          `Hi ${candidate.personal.legalGivenName}, please upload your admissions documents securely using this link: ${shareUrl}`,
+                          `Hi ${candidate.personal.legalGivenName}, please upload your admissions documents securely using this link: ${shareUrl}${
+                            candidate.intakeSharePin ? ` (Access PIN: ${candidate.intakeSharePin})` : ''
+                          }`,
                           'share-wa'
                         )
                       }

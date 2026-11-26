@@ -759,13 +759,25 @@ export const api = {
 
   createIntakeLink: async (
     candidateId: string,
-    regenerate = false
-  ): Promise<{ token: string; createdAt?: string; updatedCandidate: CandidateProfile }> => {
+    regenerate = false,
+    pin?: string
+  ): Promise<{
+    token: string;
+    createdAt?: string;
+    expiresAt?: string;
+    pin?: string;
+    updatedCandidate: CandidateProfile;
+  }> => {
+    const body: Record<string, any> = { regenerate };
+    if (pin !== undefined) body.pin = pin;
     const res = await authFetch(`${API_BASE}/candidates/${candidateId}/intake-link`, {
       method: 'POST',
-      body: JSON.stringify({ regenerate }),
+      body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error('Failed to generate upload link');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to generate upload link');
+    }
     return res.json();
   },
 
@@ -779,11 +791,19 @@ export const api = {
     return res.json();
   },
 
-  getPublicIntakePortal: async (token: string): Promise<PublicIntakePortalInfo> => {
-    const res = await fetch(`${API_BASE}/intake-portal/${encodeURIComponent(token)}`);
+  getPublicIntakePortal: async (token: string, pin?: string): Promise<PublicIntakePortalInfo> => {
+    const headers: Record<string, string> = {};
+    if (pin) headers['x-intake-pin'] = pin;
+    const res = await fetch(`${API_BASE}/intake-portal/${encodeURIComponent(token)}`, {
+      headers,
+    });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Upload link is invalid or expired');
+      const data = await res.json().catch(() => ({}));
+      const err: any = new Error(data.error || 'Upload link is invalid or expired');
+      err.pinRequired = Boolean(data.pinRequired);
+      err.agencyName = data.agencyName;
+      err.candidateFirstName = data.candidateFirstName;
+      throw err;
     }
     return res.json();
   },
@@ -791,15 +811,19 @@ export const api = {
   uploadPublicIntakeDocument: async (
     token: string,
     files: File[],
-    category: DocumentCategory | 'auto' = 'auto'
+    category: DocumentCategory | 'auto' = 'auto',
+    pin?: string
   ): Promise<{ uploadedCount: number; portal: PublicIntakePortalInfo }> => {
     const formData = new FormData();
     formData.append('category', category);
     for (const file of files) {
       formData.append('files', file);
     }
+    const headers: Record<string, string> = {};
+    if (pin) headers['x-intake-pin'] = pin;
     const res = await fetch(`${API_BASE}/intake-portal/${encodeURIComponent(token)}/upload`, {
       method: 'POST',
+      headers,
       body: formData,
     });
     if (!res.ok) {
