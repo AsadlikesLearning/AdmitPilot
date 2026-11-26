@@ -11,7 +11,7 @@ import {
   Code2,
 } from 'lucide-react';
 import { CandidateDocument, CandidateProfile, DocumentCategory } from 'admitpilot-shared';
-import { VerificationStamp } from './ui/Primitives';
+import { VerificationStamp, formatExtractionMethod, formatCategoryLabel } from './ui/Primitives';
 import { api } from '../api';
 
 interface DocumentReviewProps {
@@ -153,25 +153,38 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
   return (
     <div className="space-y-5">
       {/* Header & Document Switcher */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-[28px] leading-[1.15] font-medium text-ink-primary tracking-[-0.015em]">
-              Document review
-            </h1>
-            {document.extractionMethod && (
-              <VerificationStamp
-                tone="positive"
-                label={document.extractionMethod}
-                meta={portalName}
-              />
-            )}
-            {document.ocrApplied && <VerificationStamp tone="brass" label="OCR applied" />}
-          </div>
-          <p className="text-sm text-ink-secondary mt-1.5">
-            Verifying <span className="text-ink-primary font-medium">{document.fileName}</span> for{' '}
-            {candidate.personal.legalGivenName} {candidate.personal.familyName}
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+        <div className="space-y-2 min-w-0">
+          <h1 className="text-[28px] leading-[1.15] font-medium text-ink-primary tracking-[-0.015em]">
+            Document review
+          </h1>
+          <p className="text-sm text-ink-secondary leading-relaxed">
+            Verifying{' '}
+            <span className="text-ink-primary font-medium break-all">{document.fileName}</span>{' '}
+            for{' '}
+            <span className="text-ink-primary font-medium">
+              {candidate.personal.legalGivenName} {candidate.personal.familyName}
+            </span>
           </p>
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            {document.extractionMethod && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-surface-card border border-hairline">
+                <VerificationStamp
+                  tone="positive"
+                  label={formatExtractionMethod(document.extractionMethod)}
+                />
+              </span>
+            )}
+            {document.ocrApplied && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-surface-card border border-hairline">
+                <VerificationStamp tone="brass" label="OCR applied" />
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-card border border-hairline text-xs text-ink-muted max-w-full">
+              <span className="shrink-0">Portal file:</span>
+              <span className="font-mono text-ink-primary truncate">{portalName}</span>
+            </span>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -182,11 +195,11 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                 const target = allDocuments.find((d) => d.id === e.target.value);
                 if (target) onSelectDocument(target);
               }}
-              className="field-input h-9 w-auto text-xs"
+              className="field-input h-9 w-auto max-w-[300px] text-xs"
             >
               {allDocuments.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.category.replace(/_/g, ' ')} · {d.fileName}
+                  {formatCategoryLabel(d.category)} · {d.fileName}
                 </option>
               ))}
             </select>
@@ -408,7 +421,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                         <VerificationStamp
                           tone={isVerified || confidence >= 0.9 ? 'positive' : 'brass'}
                           label={isVerified ? 'verified' : `${(confidence * 100).toFixed(0)}%`}
-                          meta={sourceTag}
+                          meta={formatExtractionMethod(sourceTag)}
                         />
                       </div>
 
@@ -422,7 +435,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                           <button
                             type="button"
                             onClick={() => saveEdit(key)}
-                            className="h-8 w-8 rounded-lg bg-[#ededed] text-[#141415] inline-flex items-center justify-center shrink-0"
+                            className="btn-primary h-8 w-8 p-0 shrink-0"
                           >
                             <Check className="w-4 h-4" strokeWidth={1.5} />
                           </button>

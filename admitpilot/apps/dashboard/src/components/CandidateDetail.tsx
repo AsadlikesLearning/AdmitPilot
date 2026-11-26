@@ -34,7 +34,12 @@ import {
   UserProfile,
 } from 'admitpilot-shared';
 import { DocumentUploadModal } from './DocumentUploadModal';
-import { PassportCredentialCard, VerificationStamp } from './ui/Primitives';
+import {
+  PassportCredentialCard,
+  VerificationStamp,
+  formatExtractionMethod,
+  formatCategoryLabel,
+} from './ui/Primitives';
 import { api } from '../api';
 
 interface CandidateDetailProps {
@@ -873,7 +878,7 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
                               Portal file: {portalName}
                             </p>
                             <p className="font-mono text-xs text-ink-muted tabular-nums mt-1">
-                              {doc.category.replace(/_/g, ' ')} · {(doc.fileSize / 1024).toFixed(0)} KB ·{' '}
+                              {formatCategoryLabel(doc.category)} · {(doc.fileSize / 1024).toFixed(0)} KB ·{' '}
                               {fieldCount} extracted field{fieldCount === 1 ? '' : 's'}
                             </p>
                           </div>
@@ -886,8 +891,14 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
                               ? 'positive'
                               : 'brass'
                           }
-                          label={doc.verificationStatus || 'verified'}
-                          meta={doc.extractionMethod}
+                          label={
+                            doc.verificationStatus === 'needs_review'
+                              ? 'Needs review'
+                              : doc.verificationStatus === 'conflict'
+                              ? 'Conflict'
+                              : 'Verified'
+                          }
+                          meta={formatExtractionMethod(doc.extractionMethod)}
                         />
                       </div>
 

@@ -3,6 +3,44 @@ import { CandidateProfile } from 'admitpilot-shared';
 
 export type StampTone = 'positive' | 'brass' | 'negative' | 'neutral';
 
+const EXTRACTION_METHOD_LABELS: Record<string, string> = {
+  hybrid_ai: 'Hybrid AI',
+  ai_vision: 'AI Vision',
+  ai: 'AI',
+  'mrz+text': 'MRZ + Text',
+  mrz: 'MRZ',
+  ocr: 'OCR',
+  text: 'Text',
+  regex: 'Pattern',
+  manual: 'Manual',
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  passport: 'Passport',
+  cv: 'CV',
+  transcript: 'Transcript',
+  degree: 'Degree',
+  english_test: 'English test',
+  sop: 'SOP',
+  lor: 'LOR',
+  experience: 'Experience',
+  financial: 'Financial',
+  other: 'Other',
+};
+
+export function formatExtractionMethod(method?: string): string {
+  if (!method) return '';
+  return EXTRACTION_METHOD_LABELS[method] || method.replace(/_/g, ' ');
+}
+
+export function formatCategoryLabel(category?: string): string {
+  if (!category) return '';
+  return (
+    CATEGORY_LABELS[category] ||
+    category.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
+  );
+}
+
 export const VerificationStamp: React.FC<{
   tone?: StampTone;
   label: string;
@@ -18,10 +56,10 @@ export const VerificationStamp: React.FC<{
       : 'bg-ink-muted';
 
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums text-ink-secondary">
+    <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums text-ink-secondary whitespace-nowrap">
       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
       <span>{label}</span>
-      {meta && <span className="text-ink-muted">· {meta}</span>}
+      {meta && <span className="text-ink-muted truncate max-w-[220px]">· {meta}</span>}
     </span>
   );
 };
