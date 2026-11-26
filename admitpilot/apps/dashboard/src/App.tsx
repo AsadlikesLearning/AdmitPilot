@@ -403,7 +403,29 @@ export const App: React.FC = () => {
 
   const handleLogin = async (email: string, password: string) => {
     const { user } = await api.login(email, password);
+    setSelectedCandidate(null);
+    setCandidateDocs([]);
+    setCandidateCreds([]);
+    setReviewDoc(null);
     setViewScope(user.role !== 'org_admin' ? 'assigned' : 'all');
+    await loadAllData();
+  };
+
+  const handleRegisterAgency = async (payload: {
+    agencyName: string;
+    fullName: string;
+    email: string;
+    password: string;
+    headquarters?: string;
+    operatingCountries?: string[];
+  }) => {
+    await api.registerAgency(payload);
+    setSelectedCandidate(null);
+    setCandidateDocs([]);
+    setCandidateCreds([]);
+    setReviewDoc(null);
+    setViewScope('all');
+    setCurrentTab('dashboard');
     await loadAllData();
   };
 
@@ -811,6 +833,7 @@ export const App: React.FC = () => {
         currentUserId={currentUser?.id}
         onClose={() => setIsLoginModalOpen(false)}
         onLogin={handleLogin}
+        onRegisterAgency={handleRegisterAgency}
       />
     </div>
   );

@@ -505,6 +505,29 @@ export const api = {
     return data;
   },
 
+  registerAgency: async (payload: {
+    agencyName: string;
+    fullName: string;
+    email: string;
+    password: string;
+    headquarters?: string;
+    operatingCountries?: string[];
+  }): Promise<{ token: string; user: UserProfile; organization: Organization }> => {
+    const res = await fetch(`${API_BASE}/auth/register-agency`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to create agency workspace');
+    }
+    if (data?.token) {
+      localStorage.setItem('supabase-auth-token', JSON.stringify({ token: data.token }));
+    }
+    return data;
+  },
+
   logout: (): void => {
     localStorage.removeItem('supabase-auth-token');
   },

@@ -114,6 +114,56 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Self-serve Multi-Tenant Agency Sign-Up (creates isolated organization + org_admin owner)
+app.post('/api/auth/register-agency', async (req, res) => {
+  try {
+    const {
+      agencyName,
+      fullName,
+      email,
+      password,
+      headquarters,
+      defaultIntake,
+      operatingCountries,
+    } = req.body || {};
+
+    if (!agencyName || !fullName || !email || !password) {
+      return res
+        .status(400)
+        .json({ error: 'Agency name, full name, work email, and password are required' });
+    }
+    if (String(password).length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const { organization, user } = await store.registerAgency({
+      agencyName: String(agencyName),
+      fullName: String(fullName),
+      email: String(email),
+      password: String(password),
+      headquarters: headquarters ? String(headquarters) : undefined,
+      defaultIntake: defaultIntake ? String(defaultIntake) : undefined,
+      operatingCountries: Array.isArray(operatingCountries) ? operatingCountries : undefined,
+    });
+
+    const token = jwt.sign(
+      {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        organization_id: organization.id,
+      },
+      JWT_SECRET,
+      { expiresIn: '12h' }
+    );
+
+    res.status(201).json({ token, user, organization });
+  } catch (err: any) {
+    const status = err.message?.includes('already exists') ? 409 : 400;
+    res.status(status).json({ error: err.message });
+  }
+});
+
 // Local development session bootstrap (disabled in production)
 app.post('/api/auth/dev-session', (_req, res) => {
   if (process.env.NODE_ENV === 'production') {

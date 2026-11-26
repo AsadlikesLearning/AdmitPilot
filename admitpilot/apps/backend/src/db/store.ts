@@ -2489,6 +2489,116 @@ export class InMemoryStore {
     return found || null;
   }
 
+  async registerAgency(input: {
+    agencyName: string;
+    fullName: string;
+    email: string;
+    password: string;
+    headquarters?: string;
+    defaultIntake?: string;
+    operatingCountries?: string[];
+  }): Promise<{ organization: Organization; user: UserProfile }> {
+    await this.init();
+    const normEmail = input.email.trim().toLowerCase();
+    const now = new Date().toISOString();
+
+    if (this.pgActive) {
+      const pool = getPostgresPool()!;
+      const existing = await pool.query(
+        'SELECT id FROM public.user_profiles WHERE lower(email) = $1 LIMIT 1',
+        [normEmail]
+      );
+      if (existing.rowCount && existing.rowCount > 0) {
+        throw new Error('An account with this email already exists');
+      }
+    } else {
+      if (this.data.users.some((u) => u.email.toLowerCase() === normEmail)) {
+        throw new Error('An account with this email already exists');
+      }
+    }
+
+    const orgId = globalThis.crypto.randomUUID();
+    const userId = globalThis.crypto.randomUUID();
+    const deskId = globalThis.crypto.randomUUID();
+    const slugBase = input.agencyName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 32);
+    const slug = `${slugBase || 'agency'}-${orgId.slice(0, 6)}`;
+    const countries =
+      Array.isArray(input.operatingCountries) && input.operatingCountries.length > 0
+        ? input.operatingCountries
+        : ['United Kingdom', 'Canada', 'United States', 'Australia'];
+
+    const organization: Organization = {
+      id: orgId,
+      name: input.agencyName.trim(),
+      slug,
+      primaryEmail: normEmail,
+      headquarters: input.headquarters?.trim() || 'Main Office',
+      defaultIntake: input.defaultIntake?.trim() || 'September 2027',
+      operatingCountries: countries,
+      autoAssignByCountry: true,
+      requireDualReview: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const user: UserProfile = {
+      id: userId,
+      organizationId: orgId,
+      email: normEmail,
+      fullName: input.fullName.trim(),
+      role: 'org_admin',
+      jobTitle: 'Founder & Agency Owner',
+      officeLocation: input.headquarters?.trim() || 'Main Office',
+      timezone: 'UTC',
+      languages: ['English'],
+      specializations: countries.slice(0, 3),
+      countryTeamIds: [deskId],
+      assignedCountries: countries,
+      maxActiveDossiers: 50,
+      status: 'active',
+      hasLoginPassword: true,
+      notifications: {
+        documentUploads: true,
+        portalDeadlines: true,
+        conflictAlerts: true,
+        offerUpdates: true,
+      },
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const initialDesk: CountryTeam = {
+      id: deskId,
+      organizationId: orgId,
+      name: `${countries[0] || 'Primary'} Admissions Desk`,
+      code: 'MAIN',
+      countries,
+      leadUserId: userId,
+      description: 'Default admissions desk created during agency onboarding',
+      intakeFocus: organization.defaultIntake || 'September 2027',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    if (this.pgActive) {
+      await this.pgUpsertOrganization(organization);
+      await this.pgUpsertUser(user, input.password);
+      await this.pgUpsertCountryTeam(initialDesk);
+    } else {
+      this.data.organizations.push(organization);
+      this.data.users.push(user);
+      this.data.countryTeams.push(initialDesk);
+      await this.persistLocal();
+    }
+
+    return { organization, user };
+  }
+
   async deleteTeamMember(userId: string): Promise<boolean> {
     await this.init();
     const orgId = this.enforceContext();
