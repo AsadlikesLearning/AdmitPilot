@@ -450,12 +450,57 @@ export const CandidateFormModal: React.FC<CandidateModalProps> = ({
               </div>
               <div>
                 <label className="block text-xs text-ink-secondary mb-1.5">Target intake</label>
-                <input
-                  value={preferredIntake}
-                  onChange={(e) => setPreferredIntake(e.target.value)}
-                  placeholder="September 2027"
+                <select
+                  value={
+                    [
+                      'September 2026',
+                      'January 2027',
+                      'May 2027',
+                      'September 2027',
+                      'January 2028',
+                      'Fall 2026',
+                      'Spring 2027',
+                      'Fall 2027',
+                    ].includes(preferredIntake)
+                      ? preferredIntake
+                      : '__custom__'
+                  }
+                  onChange={(e) => {
+                    if (e.target.value !== '__custom__') {
+                      setPreferredIntake(e.target.value);
+                    } else {
+                      setPreferredIntake('');
+                    }
+                  }}
                   className="field-input"
-                />
+                >
+                  <option value="September 2026">September 2026</option>
+                  <option value="January 2027">January 2027</option>
+                  <option value="May 2027">May 2027</option>
+                  <option value="September 2027">September 2027</option>
+                  <option value="January 2028">January 2028</option>
+                  <option value="Fall 2026">Fall 2026</option>
+                  <option value="Spring 2027">Spring 2027</option>
+                  <option value="Fall 2027">Fall 2027</option>
+                  <option value="__custom__">Custom intake...</option>
+                </select>
+                {![
+                  'September 2026',
+                  'January 2027',
+                  'May 2027',
+                  'September 2027',
+                  'January 2028',
+                  'Fall 2026',
+                  'Spring 2027',
+                  'Fall 2027',
+                ].includes(preferredIntake) && (
+                  <input
+                    value={preferredIntake}
+                    onChange={(e) => setPreferredIntake(e.target.value)}
+                    placeholder="e.g. October 2027"
+                    className="field-input mt-2"
+                  />
+                )}
               </div>
             </div>
           </div>

@@ -648,6 +648,22 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
                     )}
                   </div>
 
+                  {(candidate.additional?.preferredIntakes || []).length > 0 && (
+                    <div>
+                      <span className="block text-xs text-ink-muted mb-1.5">Target intake</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(candidate.additional?.preferredIntakes || []).map((intake) => (
+                          <span
+                            key={intake}
+                            className="px-2 py-0.5 rounded bg-brass-soft border border-brass-border text-xs text-brass font-medium"
+                          >
+                            {intake}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {(candidate.targetCountries || candidate.additional?.preferredCountries || []).length > 0 && (
                     <div>
                       <span className="block text-xs text-ink-muted mb-1.5">Target destinations</span>
