@@ -264,10 +264,35 @@ export interface CandidateProfile {
   employment: EmploymentRecord[];
   additional: CandidateAdditional;
   payments?: CandidatePayment[];
+  intakeShareToken?: string;
+  intakeShareCreatedAt?: string;
 
   // Metadata for auditing & verification
   evidence: Record<string, FieldEvidence>;
   conflicts: Record<string, { candidateValue: string; documentValue: string; documentName: string }[]>;
+}
+
+export interface PublicIntakeChecklistItem {
+  category: DocumentCategory;
+  label: string;
+  description: string;
+  required: boolean;
+  uploadedCount: number;
+  latestFileName?: string;
+  latestStatus?: string;
+  latestUploadedAt?: string;
+}
+
+export interface PublicIntakePortalInfo {
+  candidateFirstName: string;
+  candidateFullName: string;
+  agencyName: string;
+  targetCountries: string[];
+  targetIntake?: string;
+  checklist: PublicIntakeChecklistItem[];
+  totalUploaded: number;
+  requiredCompleted: number;
+  requiredTotal: number;
 }
 
 export interface ExtractedFieldMeta {

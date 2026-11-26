@@ -12,6 +12,7 @@ import { TestFormRunner } from './components/TestFormRunner';
 import { OrganizationView } from './components/OrganizationView';
 import { AdminProfileView } from './components/AdminProfileView';
 import { LoginModal } from './components/LoginModal';
+import { ClientIntakePortal } from './components/ClientIntakePortal';
 import { api } from './api';
 import {
   CandidateProfile,
@@ -27,6 +28,15 @@ import {
 } from 'admitpilot-shared';
 
 export const App: React.FC = () => {
+  const publicIntakeToken =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('intake')
+      : null;
+
+  if (publicIntakeToken) {
+    return <ClientIntakePortal token={publicIntakeToken} />;
+  }
+
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [candidates, setCandidates] = useState<CandidateProfile[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<CandidateProfile | null>(null);
@@ -781,6 +791,12 @@ export const App: React.FC = () => {
                         onUpdateRouting={(updates) =>
                           handleAssignCandidate(selectedCandidate.id, updates)
                         }
+                        onCandidateUpdated={(updated) => {
+                          setSelectedCandidate(updated);
+                          setCandidates((prev) =>
+                            prev.map((c) => (c.id === updated.id ? updated : c))
+                          );
+                        }}
                         onDeleteCandidate={handleDeleteCandidate}
                         onArchiveCandidate={handleArchiveCandidate}
                         onRestoreCandidate={handleRestoreCandidate}

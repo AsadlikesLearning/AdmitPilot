@@ -9,6 +9,7 @@ import {
   CountryTeam,
   DocumentCategory,
   UniversityCatalogItem,
+  PublicIntakePortalInfo,
 } from 'admitpilot-shared';
 
 const API_BASE = '/api';
@@ -753,6 +754,58 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete country desk');
+    return res.json();
+  },
+
+  createIntakeLink: async (
+    candidateId: string,
+    regenerate = false
+  ): Promise<{ token: string; createdAt?: string; updatedCandidate: CandidateProfile }> => {
+    const res = await authFetch(`${API_BASE}/candidates/${candidateId}/intake-link`, {
+      method: 'POST',
+      body: JSON.stringify({ regenerate }),
+    });
+    if (!res.ok) throw new Error('Failed to generate upload link');
+    return res.json();
+  },
+
+  revokeIntakeLink: async (
+    candidateId: string
+  ): Promise<{ updatedCandidate: CandidateProfile }> => {
+    const res = await authFetch(`${API_BASE}/candidates/${candidateId}/intake-link`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to revoke upload link');
+    return res.json();
+  },
+
+  getPublicIntakePortal: async (token: string): Promise<PublicIntakePortalInfo> => {
+    const res = await fetch(`${API_BASE}/intake-portal/${encodeURIComponent(token)}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Upload link is invalid or expired');
+    }
+    return res.json();
+  },
+
+  uploadPublicIntakeDocument: async (
+    token: string,
+    files: File[],
+    category: DocumentCategory | 'auto' = 'auto'
+  ): Promise<{ uploadedCount: number; portal: PublicIntakePortalInfo }> => {
+    const formData = new FormData();
+    formData.append('category', category);
+    for (const file of files) {
+      formData.append('files', file);
+    }
+    const res = await fetch(`${API_BASE}/intake-portal/${encodeURIComponent(token)}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to upload document');
+    }
     return res.json();
   },
 };

@@ -17,6 +17,8 @@ import {
   DocumentCategory,
   FormField,
   ApplicationRecord,
+  PublicIntakeChecklistItem,
+  PublicIntakePortalInfo,
 } from 'admitpilot-shared';
 import jwt from 'jsonwebtoken';
 import { authenticateJWT, AuthRequest, JWT_SECRET } from './middleware/auth.js';
@@ -187,6 +189,164 @@ app.post('/api/auth/dev-session', (_req, res) => {
       organizationId: DEFAULT_ORG_UUID,
     },
   });
+});
+
+// -------------------------------------------------------------
+// Public Client Intake Portal Endpoints (Token-Protected)
+// -------------------------------------------------------------
+
+const INTAKE_CHECKLIST_SPEC: Array<{
+  category: DocumentCategory;
+  label: string;
+  description: string;
+  required: boolean;
+}> = [
+  {
+    category: 'passport',
+    label: 'Passport bio-page',
+    description: 'Clear color scan or photo of the passport photo & MRZ page',
+    required: true,
+  },
+  {
+    category: 'transcript',
+    label: 'Academic transcript / mark sheet',
+    description: 'All pages of official transcript, FSC/Inter, or O/A Level results',
+    required: true,
+  },
+  {
+    category: 'english_test',
+    label: 'English proficiency score report',
+    description: 'IELTS, PTE, TOEFL, or Duolingo score report',
+    required: true,
+  },
+  {
+    category: 'cv',
+    label: 'Curriculum Vitae (CV / Resume)',
+    description: 'Updated academic & work CV in PDF format',
+    required: true,
+  },
+  {
+    category: 'degree',
+    label: 'Degree / completion certificate',
+    description: 'Provisional or final degree certificate if graduated',
+    required: false,
+  },
+  {
+    category: 'sop',
+    label: 'Statement of Purpose (SOP)',
+    description: 'Personal statement or motivation letter',
+    required: false,
+  },
+  {
+    category: 'lor',
+    label: 'Letters of Recommendation (LOR)',
+    description: 'Academic or employer reference letters',
+    required: false,
+  },
+  {
+    category: 'financial',
+    label: 'Bank statement / payment receipt',
+    description: 'Tuition/consultancy fee receipt or sponsor financial letter',
+    required: false,
+  },
+];
+
+function buildPublicIntakePortalInfo(
+  candidate: CandidateProfile,
+  documents: CandidateDocument[],
+  agencyName: string
+): PublicIntakePortalInfo {
+  const checklist: PublicIntakeChecklistItem[] = INTAKE_CHECKLIST_SPEC.map((spec) => {
+    const matching = documents
+      .filter((d) => d.category === spec.category)
+      .sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
+    const latest = matching[0];
+    return {
+      category: spec.category,
+      label: spec.label,
+      description: spec.description,
+      required: spec.required,
+      uploadedCount: matching.length,
+      latestFileName: latest?.fileName,
+      latestStatus: latest?.verificationStatus,
+      latestUploadedAt: latest?.uploadedAt,
+    };
+  });
+
+  const requiredItems = checklist.filter((i) => i.required);
+  const requiredCompleted = requiredItems.filter((i) => i.uploadedCount > 0).length;
+
+  return {
+    candidateFirstName: candidate.personal.legalGivenName || 'Student',
+    candidateFullName: `${candidate.personal.legalGivenName} ${candidate.personal.familyName}`.trim(),
+    agencyName,
+    targetCountries: candidate.targetCountries?.length
+      ? candidate.targetCountries
+      : candidate.additional?.preferredCountries || [],
+    targetIntake: candidate.additional?.preferredIntakes?.[0],
+    checklist,
+    totalUploaded: documents.length,
+    requiredCompleted,
+    requiredTotal: requiredItems.length,
+  };
+}
+
+app.get('/api/intake-portal/:token', async (req, res) => {
+  try {
+    const token = String(req.params.token || '').trim();
+    const match = await store.findCandidateByIntakeToken(token);
+    if (!match) {
+      return res.status(404).json({ error: 'This upload link is invalid or has been revoked.' });
+    }
+    store.setContext({ organizationId: match.candidate.organizationId });
+    const docs = await store.listDocuments(match.candidate.id);
+    res.json(buildPublicIntakePortalInfo(match.candidate, docs, match.organizationName));
+  } catch (err: any) {
+    console.error('Public intake portal fetch failed:', err);
+    res.status(500).json({ error: err.message || 'Could not load upload portal' });
+  }
+});
+
+app.post('/api/intake-portal/:token/upload', upload.any(), async (req, res) => {
+  try {
+    const token = String(req.params.token || '').trim();
+    const match = await store.findCandidateByIntakeToken(token);
+    if (!match) {
+      return res.status(404).json({ error: 'This upload link is invalid or has been revoked.' });
+    }
+
+    const uploadedFiles = (req.files as Express.Multer.File[]) || (req.file ? [req.file] : []);
+    if (!uploadedFiles.length) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    store.setContext({ organizationId: match.candidate.organizationId });
+    const persistedAI = await store.getAISettings();
+    aiService.updateSettings(persistedAI);
+
+    const categoryHint = req.body.category as DocumentCategory | 'auto' | undefined;
+    const savedDocs: CandidateDocument[] = [];
+    for (const fileItem of uploadedFiles) {
+      const { docRecord } = await processAndMergeDocumentFile(
+        fileItem,
+        match.candidate,
+        categoryHint
+      );
+      savedDocs.push(docRecord);
+    }
+
+    const updatedCandidate = await store.saveCandidate(match.candidate);
+    const allDocs = await store.listDocuments(updatedCandidate.id);
+
+    res.status(201).json({
+      uploadedCount: savedDocs.length,
+      documents: savedDocs,
+      portal: buildPublicIntakePortalInfo(updatedCandidate, allDocs, match.organizationName),
+    });
+  } catch (err: any) {
+    console.error('Public intake portal upload failed:', err);
+    res.status(500).json({ error: err.message || 'Upload failed' });
+  }
 });
 
 // Apply JWT authentication to all other endpoints
@@ -927,6 +1087,50 @@ app.post('/api/candidates/:id/documents/upload', upload.any(), async (req, res) 
     });
   } catch (err: any) {
     console.error('Document upload/extraction failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Generate or retrieve shareable client intake upload link
+app.post('/api/candidates/:id/intake-link', async (req, res) => {
+  try {
+    const candidateId = req.params.id as string;
+    const candidate = await store.getCandidate(candidateId);
+    if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+
+    const regenerate = Boolean(req.body?.regenerate);
+    if (!candidate.intakeShareToken || regenerate) {
+      candidate.intakeShareToken = crypto.randomBytes(18).toString('base64url');
+      candidate.intakeShareCreatedAt = new Date().toISOString();
+      const updatedCandidate = await store.saveCandidate(candidate);
+      return res.json({
+        token: updatedCandidate.intakeShareToken,
+        createdAt: updatedCandidate.intakeShareCreatedAt,
+        updatedCandidate,
+      });
+    }
+
+    res.json({
+      token: candidate.intakeShareToken,
+      createdAt: candidate.intakeShareCreatedAt,
+      updatedCandidate: candidate,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/candidates/:id/intake-link', async (req, res) => {
+  try {
+    const candidateId = req.params.id as string;
+    const candidate = await store.getCandidate(candidateId);
+    if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+
+    candidate.intakeShareToken = undefined;
+    candidate.intakeShareCreatedAt = undefined;
+    const updatedCandidate = await store.saveCandidate(candidate);
+    res.json({ updatedCandidate });
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });

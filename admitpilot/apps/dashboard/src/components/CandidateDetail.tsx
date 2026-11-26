@@ -22,6 +22,7 @@ import {
   ArrowLeft,
   ClipboardList,
   Receipt,
+  Link2,
 } from 'lucide-react';
 import {
   ApplicationRecord,
@@ -74,6 +75,7 @@ interface CandidateDetailProps {
   onDeletePayment?: (paymentId: string) => Promise<void>;
   onEditCandidate: () => void;
   onUpdateRouting?: (updates: Partial<CandidateProfile>) => Promise<void>;
+  onCandidateUpdated?: (updated: CandidateProfile) => void;
   onDeleteCandidate: (id: string) => void;
   onArchiveCandidate?: (id: string) => void;
   onRestoreCandidate?: (id: string) => void;
@@ -110,6 +112,7 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
   onDeletePayment,
   onEditCandidate,
   onUpdateRouting,
+  onCandidateUpdated,
   onDeleteCandidate,
   onArchiveCandidate,
   onRestoreCandidate,
@@ -138,7 +141,56 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
   const [savingPayment, setSavingPayment] = useState(false);
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const shareUrl = candidate.intakeShareToken
+    ? `${window.location.origin}/?intake=${encodeURIComponent(candidate.intakeShareToken)}`
+    : '';
+
+  const handleOpenShareModal = async () => {
+    setIsShareModalOpen(true);
+    setShareError(null);
+    if (!candidate.intakeShareToken) {
+      setShareLoading(true);
+      try {
+        const res = await api.createIntakeLink(candidate.id, false);
+        onCandidateUpdated?.(res.updatedCandidate);
+      } catch (err: any) {
+        setShareError(err.message || 'Could not generate upload link');
+      } finally {
+        setShareLoading(false);
+      }
+    }
+  };
+
+  const handleRegenerateShareLink = async () => {
+    setShareLoading(true);
+    setShareError(null);
+    try {
+      const res = await api.createIntakeLink(candidate.id, true);
+      onCandidateUpdated?.(res.updatedCandidate);
+    } catch (err: any) {
+      setShareError(err.message || 'Could not regenerate upload link');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleRevokeShareLink = async () => {
+    setShareLoading(true);
+    setShareError(null);
+    try {
+      const res = await api.revokeIntakeLink(candidate.id);
+      onCandidateUpdated?.(res.updatedCandidate);
+    } catch (err: any) {
+      setShareError(err.message || 'Could not revoke upload link');
+    } finally {
+      setShareLoading(false);
+    }
+  };
   const [revealedMap, setRevealedMap] = useState<
     Record<string, { password: string; pinOrSecurityNote?: string }>
   >({});
@@ -433,6 +485,15 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
           >
             <Upload className="w-4 h-4" strokeWidth={1.5} />
             <span>Upload documents</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenShareModal}
+            className="btn-secondary"
+            title="Generate shareable upload link for this student"
+          >
+            <Link2 className="w-4 h-4 text-brass" strokeWidth={1.5} />
+            <span>Share upload link</span>
           </button>
           <button
             type="button"
@@ -1945,6 +2006,135 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Shareable Student Intake Upload Link Modal */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+          <div className="bg-surface-card border border-hairline-strong rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+            <div className="px-6 py-4 border-b border-hairline flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-medium text-ink-primary">
+                  Student document upload link
+                </h3>
+                <p className="text-xs text-ink-secondary mt-0.5">
+                  Send this link to {candidate.personal.legalGivenName} so they can upload missing documents directly.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(false)}
+                className="text-ink-muted hover:text-ink-primary p-1"
+              >
+                <X className="w-4 h-4" strokeWidth={1.5} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {shareError && (
+                <div className="px-3 py-2 rounded-lg bg-tone-negative/10 border border-tone-negative/30 text-xs text-tone-negative">
+                  {shareError}
+                </div>
+              )}
+
+              {shareLoading ? (
+                <div className="py-6 text-center text-xs text-ink-secondary">
+                  Updating secure upload link...
+                </div>
+              ) : shareUrl ? (
+                <>
+                  <div>
+                    <label className="block text-xs text-ink-secondary mb-1.5">
+                      Shareable student portal URL
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        readOnly
+                        value={shareUrl}
+                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                        className="field-input font-mono text-xs flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => copyText(shareUrl, 'share-url')}
+                        className="btn-primary shrink-0"
+                      >
+                        {copiedKey === 'share-url' ? (
+                          <Check className="w-4 h-4" strokeWidth={1.5} />
+                        ) : (
+                          <Copy className="w-4 h-4" strokeWidth={1.5} />
+                        )}
+                        <span>{copiedKey === 'share-url' ? 'Copied' : 'Copy link'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        copyText(
+                          `Hi ${candidate.personal.legalGivenName}, please upload your admissions documents securely using this link: ${shareUrl}`,
+                          'share-wa'
+                        )
+                      }
+                      className="btn-secondary text-xs"
+                    >
+                      {copiedKey === 'share-wa' ? (
+                        <Check className="w-3.5 h-3.5 text-tone-positive" strokeWidth={1.5} />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-ink-muted" strokeWidth={1.5} />
+                      )}
+                      <span>
+                        {copiedKey === 'share-wa' ? 'Message copied' : 'Copy WhatsApp message'}
+                      </span>
+                    </button>
+
+                    <a
+                      href={shareUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-secondary text-xs"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-ink-muted" strokeWidth={1.5} />
+                      <span>Open portal</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={handleRegenerateShareLink}
+                      className="btn-secondary text-xs"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-ink-muted" strokeWidth={1.5} />
+                      <span>Regenerate</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleRevokeShareLink}
+                      className="btn-secondary text-xs text-tone-negative ml-auto"
+                    >
+                      <span>Revoke</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="py-4 text-center space-y-3">
+                  <p className="text-xs text-ink-secondary">
+                    No active upload link for this candidate.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleRegenerateShareLink}
+                    className="btn-primary"
+                  >
+                    Generate upload link
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -1733,6 +1733,39 @@ export class InMemoryStore {
     return candidate || null;
   }
 
+  async findCandidateByIntakeToken(
+    token: string
+  ): Promise<{ candidate: CandidateProfile; organizationName: string } | null> {
+    await this.init();
+    const cleanToken = String(token || '').trim();
+    if (!cleanToken) return null;
+
+    if (this.pgActive) {
+      const pool = getPostgresPool()!;
+      const res = await pool.query(
+        `SELECT c.*, o.name AS org_name
+         FROM public.candidates c
+         LEFT JOIN public.organizations o ON o.id = c.organization_id
+         WHERE c.profile_data->>'intakeShareToken' = $1
+         LIMIT 1`,
+        [cleanToken]
+      );
+      if (!res.rowCount) return null;
+      return {
+        candidate: this.mapRowToCandidate(res.rows[0]),
+        organizationName: res.rows[0].org_name || 'Admissions Consultancy',
+      };
+    }
+
+    const candidate = this.data.candidates.find((c) => c.intakeShareToken === cleanToken);
+    if (!candidate) return null;
+    const org = this.data.organizations.find((o) => o.id === candidate.organizationId);
+    return {
+      candidate,
+      organizationName: org?.name || 'Admissions Consultancy',
+    };
+  }
+
   async saveCandidate(candidate: CandidateProfile): Promise<CandidateProfile> {
     await this.init();
     const orgId = this.enforceContext();
