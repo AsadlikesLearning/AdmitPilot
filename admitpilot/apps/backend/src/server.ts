@@ -400,25 +400,46 @@ async function processAndMergeDocumentFile(
     extraction.category,
     extraction.inlineMedia
   );
+  const AI_REFINABLE_KEYS = new Set([
+    'degreeTitle',
+    'institution',
+    'major',
+    'jobTitle',
+    'company',
+    'country',
+    'sponsorName',
+    'targetInstitution',
+    'targetProgram',
+    'recommenderName',
+  ]);
+
   if (aiResult?.fields) {
     for (const [k, v] of Object.entries(aiResult.fields)) {
-      if (extraction.fields[k] === undefined || extraction.fields[k] === null || extraction.fields[k] === '') {
+      const existingMeta = extraction.structuredFields[k];
+      const isMissing =
+        extraction.fields[k] === undefined ||
+        extraction.fields[k] === null ||
+        extraction.fields[k] === '';
+      const canRefine =
+        existingMeta?.source !== 'mrz' && AI_REFINABLE_KEYS.has(k);
+
+      if (isMissing || canRefine) {
         const mapping = FIELD_TARGET_MAP[k];
         const targetPath = mapping?.targetPath || k;
         const label = mapping?.label || k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
         extraction.fields[k] = v;
         extraction.structuredFields[k] = {
           value: v,
-          confidence: aiResult.usedVision ? 0.92 : 0.88,
+          confidence: aiResult.usedVision ? 0.94 : 0.91,
           label,
           targetPath,
-          snippet: `${aiResult.usedVision ? 'Vision' : 'Model'} extracted from ${fileObj.originalname}`,
+          snippet: `${aiResult.usedVision ? 'Vision' : 'AI'} extracted from ${fileObj.originalname}`,
           source: aiResult.usedVision ? 'ai_vision' : 'ai',
         };
         extraction.evidence[targetPath] = {
           sourceDocumentName: fileObj.originalname,
-          snippet: `${aiResult.usedVision ? 'Vision' : 'Model'} extracted from ${fileObj.originalname}`,
-          confidence: aiResult.usedVision ? 0.92 : 0.88,
+          snippet: `${aiResult.usedVision ? 'Vision' : 'AI'} extracted from ${fileObj.originalname}`,
+          confidence: aiResult.usedVision ? 0.94 : 0.91,
           status: 'extracted',
           extractedAt: new Date().toISOString(),
         };

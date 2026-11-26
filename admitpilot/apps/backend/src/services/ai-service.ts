@@ -380,6 +380,9 @@ export class AIService {
       }
       if (opts.maxTokens) {
         body.max_tokens = opts.maxTokens;
+      } else if (isOpenRouter || effectiveProvider === 'openai_compatible') {
+        // Prevent OpenRouter 402 pre-checks from reserving 65,536 output tokens on low-credit keys
+        body.max_tokens = 1500;
       }
 
       const headers: Record<string, string> = {
@@ -540,6 +543,7 @@ Return STRICT JSON matching: ${hint}`;
       const raw = await this.complete(promptBody, {
         systemPrompt,
         jsonMode: true,
+        maxTokens: 1500,
         inlineMedia: canUseVision ? inlineMedia : undefined,
       });
       const jsonMatch = raw.match(/\{[\s\S]*\}/);

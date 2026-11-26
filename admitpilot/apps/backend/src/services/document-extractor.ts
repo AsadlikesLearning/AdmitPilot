@@ -595,13 +595,28 @@ export class DocumentExtractorService {
 
       const degMatch =
         text.match(/(?:degree\s*(?:conferred|awarded|title|of)|conferred\s*the\s*degree\s*of|program(?:\s*of\s*study)?|qualification)[.:\s]+([A-Za-z\s()&-]{5,75})/i) ||
-        normText.match(/\b((?:Bachelor|Master|Doctor)\s+of\s+[A-Za-z\s()&]{3,55})\b/i) ||
-        normText.match(/\b((?:BS|B\.S\.|BSc|B\.Sc\.|BE|B\.E\.|BBA|MS|M\.S\.|MSc|MBA)\s+(?:in\s+)?[A-Za-z\s&]{3,40})\b/);
-      if (degMatch) addField('degreeTitle', cleanText(degMatch[1].split('\n')[0]), 0.93, degMatch[0]);
+        normText.match(/\b((?:Bachelor|Master|Doctor)\s+of\s+(?:Science|Arts|Engineering|Business\s+Administration|Philosophy|Technology|Laws|Computer\s+Science|[A-Za-z]+)(?:\s+in\s+[A-Za-z\s&]{2,40})?)(?=\s*(?:\(Transcript\)|of\s+above|issued\s+by|from\b|with\s+Registration|,|\n|$))/i) ||
+        normText.match(/\b((?:BS|B\.S\.|BSc|B\.Sc\.|BE|B\.E\.|BBA|MS|M\.S\.|MSc|MBA)\s+(?:in\s+)?[A-Za-z\s&]{3,40})(?=\s*(?:\(|of\s+above|issued\s+by|,|\n|$))/);
+      if (degMatch) {
+        const cleanDeg = cleanText(
+          degMatch[1]
+            .split('\n')[0]
+            .replace(/\s*\(Transcript\)\s*/i, ' ')
+            .replace(/\s+of\s+above\s+named.*$/i, '')
+            .replace(/\s+issued\s+by.*$/i, '')
+        );
+        addField('degreeTitle', cleanDeg, 0.93, degMatch[0]);
+
+        // Derive major automatically from "Bachelor of Science in Computer Science"
+        const inMajor = cleanDeg.match(/\bin\s+([A-Za-z\s&]{3,45})$/i);
+        if (inMajor && !fields.major) {
+          addField('major', cleanText(inMajor[1]), 0.91, cleanDeg);
+        }
+      }
 
       const gpaMatch =
         normText.match(
-          /(?:cgpa|cumulative\s*gpa|final\s*gpa|overall\s*gpa|gpa|grade\s*point\s*average)[.:\s]*([0-9]\.[0-9]{1,3})(?:\s*(?:\/|out\s*of)\s*([0-9](?:\.[0-9]{1,2})?))?/i
+          /(?:cgpa|cumulative\s*gpa|final\s*gpa|overall\s*gpa|sgpa|gpa|grade\s*point\s*average)[.:\s]*([0-9]\.[0-9]{1,3})(?:\s*(?:\/|out\s*of)\s*([0-9](?:\.[0-9]{1,2})?))?/i
         ) ||
         normText.match(/\b([0-4]\.[0-9]{2})\s*\/\s*(4\.00?|5\.00?)\b/);
       if (gpaMatch) {
@@ -620,20 +635,45 @@ export class DocumentExtractorService {
       const pctMatch = normText.match(/(?:percentage|overall\s*percentage|overall\s*marks)[.:\s]*([0-9]{2}(?:\.[0-9]{1,2})?)\s*%/i);
       if (pctMatch) addField('percentage', pctMatch[1], 0.94, pctMatch[0]);
 
-      const instMatch = text.match(
-        /((?:National\s+|Pakistan\s+|Lahore\s+|Quaid-i-Azam\s+|COMSATS\s+)?(?:University|Institute)[A-Za-z\s,&()-]{4,70}|[A-Za-z\s,&-]{3,45}\s+(?:University|Institute\s+of\s+Technology|College))/i
-      );
-      if (instMatch) addField('institution', cleanText(instMatch[1].split('\n')[0]), 0.91, instMatch[0]);
+      const instMatch =
+        normText.match(
+          /issued\s+by\s+([A-Z][A-Za-z0-9\s,.'&-]{4,75}?)(?=\s*(?:with\s+(?:Registration|Roll|Seat|Enrollment|Student)|dated\b|on\s+\d|\n|$))/i
+        ) ||
+        text.match(
+          /((?:National\s+|Pakistan\s+|Lahore\s+|Quaid-i-Azam\s+|COMSATS\s+)?(?:University|Institute)(?:\s+of\s+[A-Za-z\s,&()-]{3,55})?|[A-Za-z\s,&-]{3,45}\s+(?:University|Institute\s+of\s+Technology|College))/i
+        );
+      if (instMatch) {
+        const cleanInst = cleanText(
+          instMatch[1]
+            .split('\n')[0]
+            .replace(/\s+with\s+Registration.*$/i, '')
+            .replace(/\s+with\s+Roll.*$/i, '')
+        );
+        addField('institution', cleanInst, 0.92, instMatch[0]);
+      }
 
-      const majorMatch = text.match(/(?:major|discipline|department|field\s*of\s*study|specialization)[.:\s]+([A-Za-z\s&]{3,45})/i);
-      if (majorMatch) addField('major', cleanText(majorMatch[1].split('\n')[0]), 0.91, majorMatch[0]);
+      if (!fields.major) {
+        const majorMatch = text.match(/(?:major|discipline|department|field\s*of\s*study|specialization)[.:\s]+([A-Za-z\s&]{3,45})/i);
+        if (majorMatch) addField('major', cleanText(majorMatch[1].split('\n')[0]), 0.91, majorMatch[0]);
+      }
 
       const awardMatch = normText.match(
-        new RegExp(`(?:awarded\\s*on|conferred\\s*on|graduation\\s*(?:\\/\\s*award)?\\s*date|date\\s*of\\s*completion|date\\s*of\\s*graduation|result\\s*declaration\\s*date)[.:\\s]*${DATE_TOKEN_RE}`, 'i')
+        new RegExp(`(?:awarded\\s*on|conferred\\s*on|graduation\\s*(?:\\/\\s*award)?\\s*date|date\\s*of\\s*completion|date\\s*of\\s*graduation|date\\s*of\\s*issuance|result\\s*declaration\\s*date)[.:\\s]*${DATE_TOKEN_RE}`, 'i')
       );
       if (awardMatch) {
         const norm = normalizeDate(awardMatch[1]);
         if (norm) addField('awardDate', norm, 0.93, awardMatch[0]);
+      }
+
+      // Extract student DOB & CNIC/National ID if printed on transcript / HEC attestation
+      const dobMatch = normText.match(new RegExp(`(?:date\\s*of\\s*birth|dob)[.:\\s]*${DATE_TOKEN_RE}`, 'i'));
+      if (dobMatch) {
+        const normDob = normalizeDate(dobMatch[1]);
+        if (normDob) addField('dateOfBirth', normDob, 0.94, dobMatch[0]);
+      }
+      const cnicMatch = normText.match(/(?:cnic\s*(?:no|number)?|national\s*id)[.:\s]*([0-9]{5}-?[0-9]{7}-?[0-9])/i);
+      if (cnicMatch) {
+        addField('nationalId', cnicMatch[1], 0.93, cnicMatch[0]);
       }
     }
 
