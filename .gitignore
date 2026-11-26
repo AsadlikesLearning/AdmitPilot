@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Secrets & Environment Variables (NEVER COMMIT)
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local Data & Uploaded Candidate Documents
+admitpilot_data.json
+**/admitpilot_data.json
+uploads/
+**/uploads/
+
+# Build Outputs & Caches
+dist/
+**/dist/
+build/
+**/build/
+*.tsbuildinfo
+coverage/
+**/coverage/
+
+# Test Artifacts & Logs
+*.log
+logs/
+test-results/
+playwright-report/
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

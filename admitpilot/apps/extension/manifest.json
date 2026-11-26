@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "AdmitPilot AI — Intelligent Admissions Agent",
+  "version": "2.8.0",
+  "description": "One Candidate Profile. Every University Application. Intelligent admissions form matching, autofill & requirement intelligence.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "tabs",
+    "activeTab",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost:3001/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AdmitPilot AI"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["page-funcs.js", "icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
+

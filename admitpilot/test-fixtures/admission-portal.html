@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Global Admissions Portal — University of Manchester</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px; }
+    .portal-container { max-width: 800px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); border: 1px solid #334155; }
+    h1 { margin-top: 0; color: #fff; font-size: 22px; }
+    .section-title { font-size: 14px; font-weight: bold; color: #818cf8; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; padding-bottom: 6px; margin: 24px 0 14px 0; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    label { display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 5px; font-weight: 500; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: 9px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; color: #fff; font-size: 13px; outline: none; transition: border-color 0.2s; }
+    input:focus, select:focus { border-color: #6366f1; }
+    .btn-submit { background: #4f46e5; color: #fff; font-weight: bold; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; margin-top: 24px; width: 100%; font-size: 14px; }
+    .btn-submit:hover { background: #4338ca; }
+    .status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; background: #22c55e20; color: #4ade80; border: 1px solid #22c55e40; margin-bottom: 15px; }
+    .filled-indicator { font-size: 11px; color: #4ade80; margin-top: 4px; display: none; }
+  </style>
+</head>
+<body>
+  <div class="portal-container">
+    <span class="status-badge">Official Admissions Application 2026</span>
+    <h1>Postgraduate Application Form</h1>
+    <p style="font-size: 12px; color: #94a3b8; margin-top: -6px;">Please complete all required sections accurately according to your legal travel passport.</p>
+
+    <form id="admissionForm">
+      <div class="section-title">1. Candidate Identity</div>
+      <div class="grid">
+        <div>
+          <label for="givenNames">Given Names / First Name *</label>
+          <input type="text" id="givenNames" name="givenNames" required placeholder="e.g. Muhammad Ali">
+        </div>
+        <div>
+          <label for="familyName">Family Name / Surname as on passport *</label>
+          <input type="text" id="familyName" name="familyName" required placeholder="e.g. Khan">
+        </div>
+      </div>
+
+      <div class="grid-3" style="margin-top: 14px;">
+        <div>
+          <label for="email">Primary Applicant Email *</label>
+          <input type="email" id="email" name="email" required placeholder="name@domain.com">
+        </div>
+        <div>
+          <label for="phone">Contact Mobile Phone *</label>
+          <input type="tel" id="phone" name="phone" required placeholder="+92 300 1234567">
+        </div>
+        <div>
+          <label for="dob">Date of Birth (DOB) *</label>
+          <input type="date" id="dob" name="dateOfBirth" required>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top: 14px;">
+        <div>
+          <label for="nationality">Country of Citizenship / Nationality *</label>
+          <select id="nationality" name="nationality" required>
+            <option value="">Select nationality...</option>
+            <option value="Pakistan">Pakistan</option>
+            <option value="India">India</option>
+            <option value="United States">United States</option>
+            <option value="United Kingdom">United Kingdom</option>
+            <option value="Canada">Canada</option>
+            <option value="Nigeria">Nigeria</option>
+          </select>
+        </div>
+        <div>
+          <label for="birthCountry">Country of Birth *</label>
+          <input type="text" id="birthCountry" name="countryOfBirth" placeholder="e.g. Pakistan">
+        </div>
+      </div>
+
+      <div class="section-title">2. Travel Documentation</div>
+      <div class="grid">
+        <div>
+          <label for="passportNumber">Passport Document Number *</label>
+          <input type="text" id="passportNumber" name="passportNumber" required placeholder="e.g. AB1234567">
+        </div>
+        <div>
+          <label for="passportExpiry">Passport Expiration Date *</label>
+          <input type="date" id="passportExpiry" name="passportExpiry" required>
+        </div>
+      </div>
+
+      <div class="section-title">3. Contact & Residence</div>
+      <div>
+        <label for="streetAddress">Street Address Line 1 *</label>
+        <input type="text" id="streetAddress" name="streetAddress" required placeholder="House, Street, Area">
+      </div>
+      <div class="grid-3" style="margin-top: 14px;">
+        <div>
+          <label for="city">City of Residence *</label>
+          <input type="text" id="city" name="city" required placeholder="e.g. Islamabad">
+        </div>
+        <div>
+          <label for="state">State / Province *</label>
+          <input type="text" id="state" name="state" required placeholder="e.g. Federal Capital">
+        </div>
+        <div>
+          <label for="postalCode">Postal / ZIP Code *</label>
+          <input type="text" id="postalCode" name="postalCode" required placeholder="e.g. 44000">
+        </div>
+      </div>
+
+      <div class="section-title">4. Academic Background & Language</div>
+      <div class="grid">
+        <div>
+          <label for="degreeTitle">Highest Academic Degree / Qualification Obtained *</label>
+          <input type="text" id="degreeTitle" name="degreeTitle" required placeholder="e.g. Bachelor of Science in Computer Science">
+        </div>
+        <div>
+          <label for="institution">Awarding University / Institution *</label>
+          <input type="text" id="institution" name="institution" required placeholder="e.g. National University of Sciences and Technology">
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top: 14px;">
+        <div>
+          <label for="gpa">Graduation CGPA *</label>
+          <input type="text" id="gpa" name="gpa" placeholder="e.g. 3.82">
+        </div>
+        <div>
+          <label for="ieltsScore">Overall IELTS / English Band Score *</label>
+          <input type="text" id="ieltsScore" name="ieltsScore" placeholder="e.g. 7.5">
+        </div>
+      </div>
+
+      <button type="button" class="btn-submit" onclick="alert('Form submission received by admissions board!')">Submit International Application</button>
+    </form>
+  </div>
+</body>
+</html>
+

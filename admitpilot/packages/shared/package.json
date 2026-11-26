@@ -1,0 +1,20 @@
+{
+  "name": "admitpilot-shared",
+  "version": "1.0.0",
+  "description": "Shared types, schemas, confidence scoring and parsing utilities for AdmitPilot AI",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.0",
+    "typescript": "^5.6.3"
+  }
+}
+

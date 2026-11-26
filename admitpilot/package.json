@@ -1,0 +1,27 @@
+{
+  "name": "admitpilot-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=admitpilot-shared && npm run build --workspace=admitpilot-backend && npm run build --workspace=admitpilot-dashboard && npm run build --workspace=admitpilot-extension",
+    "dashboard:dev": "npm run dev --workspace=admitpilot-dashboard",
+    "dashboard:build": "npm run build --workspace=admitpilot-dashboard",
+    "backend:dev": "npm run dev --workspace=admitpilot-backend",
+    "backend:build": "npm run build --workspace=admitpilot-backend",
+    "extension:dev": "npm run dev --workspace=admitpilot-extension",
+    "extension:build": "npm run build --workspace=admitpilot-extension",
+    "test": "npm test --workspace=admitpilot-shared && node --test tests/integration.test.ts && node --test tests/extension-build.test.ts && node --test tests/functional-dom.test.ts && node --test tests/phase2-intelligence.test.ts"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0"
+  }
+}

@@ -1,0 +1,36 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Data files with candidate information
+admitpilot_data.json
+apps/backend/admitpilot_data.json
+
+# Upload directory with candidate documents
+uploads/
+apps/backend/uploads/
+*.pdf
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+*.tsbuildinfo
+
+# Test coverage
+coverage/
