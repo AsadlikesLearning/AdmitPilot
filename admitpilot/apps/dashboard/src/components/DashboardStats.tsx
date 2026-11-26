@@ -1,12 +1,19 @@
 import React from 'react';
-import { Plus, ArrowUpRight, CalendarClock } from 'lucide-react';
+import {
+  Plus,
+  ArrowUpRight,
+  CalendarClock,
+  AlertCircle,
+  CheckCircle2,
+  FileWarning,
+} from 'lucide-react';
 import { CandidateProfile, ApplicationRecord } from 'admitpilot-shared';
-import { PassportCredentialCard, VerificationStamp } from './ui/Primitives';
+import { VerificationStamp } from './ui/Primitives';
 
 interface StatsProps {
   candidates: CandidateProfile[];
   applications: ApplicationRecord[];
-  selectedCandidate: CandidateProfile | null;
+  viewScope?: 'assigned' | 'all';
   isOrgAdmin?: boolean;
   onSelectTab: (tab: any) => void;
   onSelectCandidate: (c: CandidateProfile) => void;
@@ -22,7 +29,7 @@ function initialsOf(given?: string, family?: string): string {
 export const DashboardStats: React.FC<StatsProps> = ({
   candidates,
   applications,
-  selectedCandidate,
+  viewScope = 'all',
   isOrgAdmin = false,
   onSelectTab,
   onSelectCandidate,
@@ -57,6 +64,77 @@ export const DashboardStats: React.FC<StatsProps> = ({
   const candidateNameById = new Map(
     candidates.map((c) => [c.id, `${c.personal.legalGivenName} ${c.personal.familyName}`])
   );
+
+  // Build workspace-wide Action Items & Upcoming Deadlines
+  type ActionItem = {
+    id: string;
+    kind: 'missing' | 'deposit' | 'deadline';
+    title: string;
+    subtitle: string;
+    badge: string;
+    tone: 'brass' | 'negative' | 'neutral';
+    onClick: () => void;
+  };
+
+  const actionItems: ActionItem[] = [];
+
+  for (const c of candidates) {
+    const missing: string[] = [];
+    if (!c.passport?.passportNumber) missing.push('passport');
+    if (c.englishTests.length === 0) missing.push('English test');
+    if (c.education.length === 0) missing.push('academic record');
+    if (missing.length > 0) {
+      actionItems.push({
+        id: `missing-${c.id}`,
+        kind: 'missing',
+        title: `${c.personal.legalGivenName} ${c.personal.familyName}`,
+        subtitle: `Missing ${missing.join(', ')}`,
+        badge: 'Incomplete',
+        tone: 'brass',
+        onClick: () => {
+          onSelectCandidate(c);
+          onSelectTab('candidates');
+        },
+      });
+    }
+  }
+
+  for (const a of applications) {
+    const isOffer =
+      a.status === 'conditional_offer' || a.status === 'unconditional_offer';
+    if (isOffer && !a.depositPaid) {
+      actionItems.push({
+        id: `deposit-${a.id}`,
+        kind: 'deposit',
+        title: a.institutionName,
+        subtitle: `${candidateNameById.get(a.candidateId) || 'Candidate'} · Tuition deposit unpaid`,
+        badge: 'Deposit due',
+        tone: 'brass',
+        onClick: () => onSelectTab('applications'),
+      });
+    }
+  }
+
+  const upcomingDeadlines = applications
+    .filter((a) => Boolean(a.deadline))
+    .slice()
+    .sort((a, b) => (a.deadline || '').localeCompare(b.deadline || ''));
+
+  for (const a of upcomingDeadlines) {
+    const daysLeft = a.deadline
+      ? Math.ceil((new Date(a.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      : null;
+    const isUrgent = daysLeft !== null && daysLeft <= 14;
+    actionItems.push({
+      id: `deadline-${a.id}`,
+      kind: 'deadline',
+      title: `${a.institutionName} · ${a.programName}`,
+      subtitle: candidateNameById.get(a.candidateId) || 'Candidate application',
+      badge: a.deadline || '',
+      tone: isUrgent ? 'negative' : 'neutral',
+      onClick: () => onSelectTab('applications'),
+    });
+  }
 
   const stages = [
     {
@@ -105,7 +183,7 @@ export const DashboardStats: React.FC<StatsProps> = ({
     {
       label: 'Active dossiers',
       value: String(activeCandidates),
-      sub: `${totalCandidates} total in workspace`,
+      sub: `${totalCandidates} total in scope`,
       highlight: false,
       progress: undefined as number | undefined,
       targetTab: 'candidates',
@@ -138,16 +216,28 @@ export const DashboardStats: React.FC<StatsProps> = ({
     },
   ];
 
+  const scopeLabel =
+    viewScope === 'assigned' && !isOrgAdmin
+      ? 'Assigned to you'
+      : viewScope === 'assigned'
+      ? 'My assigned scope'
+      : 'Agency-wide intake';
+
   return (
     <div className="space-y-6">
       {/* Page Title & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-[28px] leading-[1.15] font-medium text-ink-primary tracking-[-0.015em]">
-            Intake overview
-          </h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-[28px] leading-[1.15] font-medium text-ink-primary tracking-[-0.015em]">
+              Intake overview
+            </h1>
+            <span className="px-2 py-0.5 rounded-md bg-surface-card border border-hairline text-[11px] font-medium text-ink-secondary">
+              {scopeLabel}
+            </span>
+          </div>
           <p className="text-sm text-ink-secondary mt-1.5">
-            Verified student dossiers, document provenance, and university portal submissions
+            Workspace-wide dossier readiness, university applications, and upcoming deadlines
           </p>
         </div>
 
@@ -201,7 +291,7 @@ export const DashboardStats: React.FC<StatsProps> = ({
         ))}
       </div>
 
-      {/* Asymmetric Split: 8-col Main Readiness & Ledger + 4-col Credential Card & Queue */}
+      {/* Asymmetric Split: 8-col Main Readiness & Ledger + 4-col Workspace Action Items & Queue */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Main 2/3 Column: Intake Pipeline Chart + Candidate Readiness Table */}
         <div className="lg:col-span-8 rounded-xl bg-surface-card border border-hairline overflow-hidden">
@@ -283,7 +373,7 @@ export const DashboardStats: React.FC<StatsProps> = ({
 
             {candidates.length === 0 ? (
               <div className="p-8 text-center space-y-3">
-                <p className="text-sm text-ink-secondary">No candidate dossiers in this workspace yet.</p>
+                <p className="text-sm text-ink-secondary">No candidate dossiers in this scope yet.</p>
                 <button type="button" onClick={onNewCandidate} className="btn-secondary">
                   <Plus className="w-4 h-4 text-ink-secondary" strokeWidth={1.5} />
                   <span>Add first candidate</span>
@@ -303,7 +393,6 @@ export const DashboardStats: React.FC<StatsProps> = ({
                   </thead>
                   <tbody className="divide-y divide-hairline text-[13px]">
                     {candidates.slice(0, 6).map((c) => {
-                      const isSelected = selectedCandidate?.id === c.id;
                       const edu = c.education[0];
                       const eng = c.englishTests[0];
                       const hasPassport = Boolean(c.passport?.passportNumber);
@@ -323,9 +412,7 @@ export const DashboardStats: React.FC<StatsProps> = ({
                             onSelectCandidate(c);
                             onSelectTab('candidates');
                           }}
-                          className={`cursor-pointer transition-colors duration-150 ease-quart ${
-                            isSelected ? 'bg-surface-raised/60' : 'hover:bg-surface-raised/35'
-                          }`}
+                          className="cursor-pointer hover:bg-surface-raised/35 transition-colors duration-150 ease-quart"
                         >
                           <td className="py-3 px-6">
                             <div className="flex items-center gap-3">
@@ -369,15 +456,75 @@ export const DashboardStats: React.FC<StatsProps> = ({
           </div>
         </div>
 
-        {/* Right 1/3 Column: Tactile Passport & Academic Credential Object + Portal Queue */}
+        {/* Right 1/3 Column: Workspace Action Items & Deadlines + Portal Queue */}
         <div className="lg:col-span-4 space-y-5">
-          {selectedCandidate && (
-            <PassportCredentialCard
-              candidate={selectedCandidate}
-              onInspectDossier={() => onSelectTab('candidates')}
-            />
-          )}
+          {/* Action items & deadlines */}
+          <div className="p-5 rounded-xl bg-surface-card border border-hairline space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-medium text-ink-primary">Action items & deadlines</h3>
+              <span className="text-xs tabular-nums text-ink-muted">
+                {actionItems.length} open
+              </span>
+            </div>
 
+            {actionItems.length === 0 ? (
+              <div className="py-4 flex items-center gap-2.5 text-xs text-ink-secondary">
+                <CheckCircle2 className="w-4 h-4 text-tone-positive shrink-0" strokeWidth={1.5} />
+                <span>All dossiers and upcoming deadlines are on track.</span>
+              </div>
+            ) : (
+              <div className="divide-y divide-hairline">
+                {actionItems.slice(0, 5).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={item.onClick}
+                    className="w-full py-2.5 first:pt-0 last:pb-0 flex items-start justify-between gap-3 text-left hover:opacity-85 transition-opacity"
+                  >
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      {item.kind === 'deadline' ? (
+                        <CalendarClock
+                          className={`w-4 h-4 shrink-0 mt-0.5 ${
+                            item.tone === 'negative' ? 'text-tone-negative' : 'text-brass'
+                          }`}
+                          strokeWidth={1.5}
+                        />
+                      ) : item.kind === 'deposit' ? (
+                        <AlertCircle
+                          className="w-4 h-4 text-brass shrink-0 mt-0.5"
+                          strokeWidth={1.5}
+                        />
+                      ) : (
+                        <FileWarning
+                          className="w-4 h-4 text-brass shrink-0 mt-0.5"
+                          strokeWidth={1.5}
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-ink-primary truncate">
+                          {item.title}
+                        </p>
+                        <p className="text-xs text-ink-muted truncate">{item.subtitle}</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium tabular-nums shrink-0 ${
+                        item.tone === 'negative'
+                          ? 'bg-tone-negative/10 text-tone-negative'
+                          : item.tone === 'brass'
+                          ? 'bg-brass-soft text-brass'
+                          : 'bg-surface-deep text-ink-secondary border border-hairline'
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Portal queue */}
           <div className="p-5 rounded-xl bg-surface-card border border-hairline space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-ink-primary">Portal queue</h3>
@@ -419,16 +566,10 @@ export const DashboardStats: React.FC<StatsProps> = ({
                           {a.institutionName}
                         </p>
                         <p className="text-xs text-ink-muted truncate">{a.programName}</p>
-                        {(studentName || a.deadline) && (
-                          <div className="flex items-center gap-2 mt-1 text-[11px] text-ink-secondary">
-                            {studentName && <span className="truncate">{studentName}</span>}
-                            {a.deadline && (
-                              <span className="inline-flex items-center gap-1 text-brass tabular-nums shrink-0">
-                                <CalendarClock className="w-3 h-3" strokeWidth={1.5} />
-                                {a.deadline}
-                              </span>
-                            )}
-                          </div>
+                        {studentName && (
+                          <p className="text-[11px] text-ink-secondary truncate mt-0.5">
+                            {studentName}
+                          </p>
                         )}
                       </div>
                       <div className="pt-0.5 shrink-0">

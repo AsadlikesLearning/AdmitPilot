@@ -734,12 +734,7 @@ export const App: React.FC = () => {
                   <DashboardStats
                     candidates={scopedCandidates}
                     applications={scopedApplications}
-                    selectedCandidate={
-                      (selectedCandidate &&
-                        scopedCandidates.find((c) => c.id === selectedCandidate.id)) ||
-                      scopedCandidates[0] ||
-                      null
-                    }
+                    viewScope={viewScope}
                     isOrgAdmin={currentUser?.role === 'org_admin'}
                     onSelectTab={setCurrentTab}
                     onSelectCandidate={handleSelectCandidate}
