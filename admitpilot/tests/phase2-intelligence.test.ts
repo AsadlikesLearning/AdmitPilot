@@ -55,6 +55,33 @@ describe('Phase 2 Document Intelligence & MRZ Parser', () => {
     assert.ok(ovEv && ovEv.confidence >= 0.95);
   });
 
+  it('extracts official British Council / IDP IELTS eTRF spatial table layout (01/JUN/2025, Band + CEFR)', () => {
+    const extractor = new DocumentExtractorService();
+    const officialTrfLayout = [
+      'Test Report Form   ACADEMIC',
+      'NOTE It is recommended that the candidate’s language ability as indicated in this Test Report Form be re-assessed after two years from the date of the test.',
+      'Centre Number   PK011   01/JUN/2025   Candidate Number   502437',
+      'Date of Birth   08/10/2001   M   Private Candidate',
+      'Test Results',
+      'Overall   CEFR',
+      'Listening 6.5   Reading 6.5   Writing 6.5   Speaking 6.0   Band 6.5   B2',
+      'Level   Score',
+      '02/06/2025   25PK502437ABDA011A',
+    ].join('\n');
+
+    const { fields } = extractor.extractStructuredFields(officialTrfLayout, 'english_test', 'IELTS_ASAD_ABDULLAH.pdf');
+    assert.strictEqual(fields.testType, 'IELTS');
+    assert.strictEqual(fields.referenceNumber, '25PK502437ABDA011A');
+    assert.strictEqual(fields.testDate, '2025-06-01');
+    assert.strictEqual(fields.expiryDate, '2027-06-01');
+    assert.strictEqual(fields.listening, '6.5');
+    assert.strictEqual(fields.reading, '6.5');
+    assert.strictEqual(fields.writing, '6.5');
+    assert.strictEqual(fields.speaking, '6.0');
+    assert.strictEqual(fields.overallScore, '6.5');
+    assert.strictEqual(fields.cefrLevel, 'B2');
+  });
+
   it('detects conflicts when uploaded document differs from candidate record', () => {
     const extractor = new DocumentExtractorService();
     const candidateMock: any = {
