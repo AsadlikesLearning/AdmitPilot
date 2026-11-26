@@ -11,6 +11,8 @@ import {
   CountryTeam,
   UserProfile,
   AISettings,
+  UniversityCatalogItem,
+  buildDefaultUniversityCatalog,
 } from 'admitpilot-shared';
 import { buildSeedDocuments } from '../utils/pdf-seed.js';
 import {
@@ -54,6 +56,7 @@ export interface DataStore {
   credentials: StoredCredentialInternal[];
   documents: CandidateDocument[];
   applications: ApplicationRecord[];
+  universityCatalog?: UniversityCatalogItem[];
   aiSettings: AISettings;
 }
 
@@ -2776,6 +2779,140 @@ export class InMemoryStore {
       (t) => !(t.id === normTeamId && t.organizationId === orgId)
     );
     if (this.data.countryTeams.length === before) return false;
+    await this.persistLocal();
+    return true;
+  }
+
+  // ------------------------------------------------------------------------
+  // University & Program Catalog (Per-Tenant)
+  // ------------------------------------------------------------------------
+  private universityTableReady = false;
+
+  private async ensureUniversityTable(): Promise<void> {
+    if (this.universityTableReady || !this.pgActive) return;
+    const pool = getPostgresPool()!;
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.university_catalog (
+        id TEXT PRIMARY KEY,
+        organization_id UUID NOT NULL,
+        name TEXT NOT NULL,
+        country TEXT NOT NULL,
+        catalog_data JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_university_catalog_org ON public.university_catalog (organization_id);
+    `);
+    this.universityTableReady = true;
+  }
+
+  async listUniversities(): Promise<UniversityCatalogItem[]> {
+    await this.init();
+    const orgId = this.enforceContext();
+
+    if (this.pgActive) {
+      await this.ensureUniversityTable();
+      const pool = getPostgresPool()!;
+      const res = await pool.query(
+        'SELECT * FROM public.university_catalog WHERE organization_id = $1 ORDER BY name ASC',
+        [orgId]
+      );
+      if (res.rowCount && res.rowCount > 0) {
+        return res.rows.map((r) => r.catalog_data as UniversityCatalogItem);
+      }
+      const defaults = buildDefaultUniversityCatalog(orgId);
+      for (const item of defaults) {
+        await this.saveUniversity({ ...item, id: `${orgId.slice(0, 8)}-${item.id}` });
+      }
+      const seeded = await pool.query(
+        'SELECT * FROM public.university_catalog WHERE organization_id = $1 ORDER BY name ASC',
+        [orgId]
+      );
+      return seeded.rows.map((r) => r.catalog_data as UniversityCatalogItem);
+    }
+
+    if (!Array.isArray(this.data.universityCatalog)) {
+      this.data.universityCatalog = [];
+    }
+    const existing = this.data.universityCatalog.filter((u) => u.organizationId === orgId);
+    if (existing.length > 0) return existing;
+
+    const defaults = buildDefaultUniversityCatalog(orgId).map((item) => ({
+      ...item,
+      id: `${orgId.slice(0, 8)}-${item.id}`,
+    }));
+    this.data.universityCatalog.push(...defaults);
+    await this.persistLocal();
+    return defaults;
+  }
+
+  async saveUniversity(input: Partial<UniversityCatalogItem> & { name: string; country: string }): Promise<UniversityCatalogItem> {
+    await this.init();
+    const orgId = this.enforceContext();
+    const now = new Date().toISOString();
+    const id = input.id || globalThis.crypto.randomUUID();
+    const item: UniversityCatalogItem = {
+      id,
+      organizationId: orgId,
+      name: input.name.trim(),
+      country: input.country.trim(),
+      city: input.city?.trim() || undefined,
+      portalUrl: input.portalUrl?.trim() || undefined,
+      isPartner: Boolean(input.isPartner),
+      programs: Array.isArray(input.programs) ? input.programs : [],
+      notes: input.notes?.trim() || undefined,
+      createdAt: input.createdAt || now,
+      updatedAt: now,
+    };
+
+    if (this.pgActive) {
+      await this.ensureUniversityTable();
+      const pool = getPostgresPool()!;
+      await pool.query(
+        `INSERT INTO public.university_catalog (id, organization_id, name, country, catalog_data, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           country = EXCLUDED.country,
+           catalog_data = EXCLUDED.catalog_data,
+           updated_at = EXCLUDED.updated_at`,
+        [item.id, orgId, item.name, item.country, JSON.stringify(item), item.createdAt, now]
+      );
+      return item;
+    }
+
+    if (!Array.isArray(this.data.universityCatalog)) {
+      this.data.universityCatalog = [];
+    }
+    const idx = this.data.universityCatalog.findIndex(
+      (u) => u.id === item.id && u.organizationId === orgId
+    );
+    if (idx >= 0) this.data.universityCatalog[idx] = item;
+    else this.data.universityCatalog.push(item);
+    await this.persistLocal();
+    return item;
+  }
+
+  async deleteUniversity(universityId: string): Promise<boolean> {
+    await this.init();
+    const orgId = this.enforceContext();
+
+    if (this.pgActive) {
+      await this.ensureUniversityTable();
+      const pool = getPostgresPool()!;
+      const res = await pool.query(
+        'DELETE FROM public.university_catalog WHERE id = $1 AND organization_id = $2',
+        [universityId, orgId]
+      );
+      return (res.rowCount ?? 0) > 0;
+    }
+
+    if (!Array.isArray(this.data.universityCatalog)) return false;
+    const before = this.data.universityCatalog.length;
+    this.data.universityCatalog = this.data.universityCatalog.filter(
+      (u) => !(u.id === universityId && u.organizationId === orgId)
+    );
+    if (this.data.universityCatalog.length === before) return false;
     await this.persistLocal();
     return true;
   }

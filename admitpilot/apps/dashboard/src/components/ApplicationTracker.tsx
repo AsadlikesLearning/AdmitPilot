@@ -15,6 +15,9 @@ import {
   FileCheck2,
   Clock,
   Send,
+  Building2,
+  Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   ApplicationRecord,
@@ -29,6 +32,8 @@ import {
   CasStatus,
   VisaStatus,
   DocumentCategory,
+  UniversityCatalogItem,
+  evaluateEligibility,
 } from 'admitpilot-shared';
 import { VerificationStamp, StampTone } from './ui/Primitives';
 import { api } from '../api';
@@ -37,7 +42,27 @@ interface AppTrackerProps {
   applications: ApplicationRecord[];
   candidates: CandidateProfile[];
   countryTeams?: CountryTeam[];
+  universities?: UniversityCatalogItem[];
+  isOrgAdmin?: boolean;
   onCreateApplication: (app: Partial<ApplicationRecord>) => Promise<void>;
+  onBatchCreateApplications?: (payload: {
+    candidateId: string;
+    items: Array<{
+      institutionName: string;
+      programName: string;
+      degreeLevel?: ApplicationRecord['degreeLevel'];
+      country: string;
+      intake?: string;
+      deadline?: string;
+      portalUrl?: string;
+      applicationFee?: string;
+      tuitionFee?: string;
+      requiredDocs?: DocumentCategory[];
+    }>;
+  }) => Promise<void>;
+  onCreateUniversity?: (
+    uni: Partial<UniversityCatalogItem> & { name: string; country: string }
+  ) => Promise<void>;
   onUpdateApplication: (
     appId: string,
     updates: Partial<ApplicationRecord> & { newTimelineNote?: string; newTimelineType?: string }
@@ -95,16 +120,42 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
   applications,
   candidates,
   countryTeams = [],
+  universities = [],
+  isOrgAdmin = false,
   onCreateApplication,
+  onBatchCreateApplications,
+  onCreateUniversity,
   onUpdateApplication,
   onDeleteApplication,
 }) => {
-  const [viewMode, setViewMode] = useState<'board' | 'table'>('board');
+  const [viewMode, setViewMode] = useState<'board' | 'table' | 'universities'>('board');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCountry, setFilterCountry] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isShortlistOpen, setIsShortlistOpen] = useState(false);
+  const [isAddUniOpen, setIsAddUniOpen] = useState(false);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+
+  // Shortlist & Catalog state
+  const [shortlistCandidateId, setShortlistCandidateId] = useState(candidates[0]?.id || '');
+  const [shortlistSelectedKeys, setShortlistSelectedKeys] = useState<string[]>([]);
+  const [shortlistBusy, setShortlistBusy] = useState(false);
+  const [selectedCatalogUniId, setSelectedCatalogUniId] = useState('');
+  const [selectedCatalogProgId, setSelectedCatalogProgId] = useState('');
+
+  // Custom University state
+  const [uName, setUName] = useState('');
+  const [uCountry, setUCountry] = useState('United Kingdom');
+  const [uCity, setUCity] = useState('');
+  const [uPortalUrl, setUPortalUrl] = useState('');
+  const [uProgName, setUProgName] = useState('');
+  const [uProgDegree, setUProgDegree] = useState<ApplicationRecord['degreeLevel']>("Master's");
+  const [uProgIntake, setUProgIntake] = useState('September 2027');
+  const [uProgDeadline, setUProgDeadline] = useState('2027-05-31');
+  const [uProgTuition, setUProgTuition] = useState('');
+  const [uProgMinGpa, setUProgMinGpa] = useState('3.0');
+  const [uProgMinIelts, setUProgMinIelts] = useState('6.5');
 
   // Create form state
   const [candidateId, setCandidateId] = useState(candidates[0]?.id || '');
@@ -337,7 +388,7 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <div className="inline-flex rounded-lg bg-surface-card border border-hairline p-0.5">
             <button
               type="button"
@@ -363,7 +414,45 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
               <List className="w-4 h-4" strokeWidth={1.5} />
               <span>Table</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('universities')}
+              className={`h-8 px-2.5 rounded-md text-xs inline-flex items-center gap-1.5 transition-colors duration-150 ease-quart ${
+                viewMode === 'universities'
+                  ? 'bg-surface-raised text-ink-primary font-medium'
+                  : 'text-ink-muted hover:text-ink-primary'
+              }`}
+            >
+              <Building2 className="w-4 h-4" strokeWidth={1.5} />
+              <span>By university</span>
+            </button>
           </div>
+
+          {onBatchCreateApplications && (
+            <button
+              type="button"
+              onClick={() => {
+                setShortlistCandidateId(candidates[0]?.id || '');
+                setShortlistSelectedKeys([]);
+                setIsShortlistOpen(true);
+              }}
+              className="btn-secondary"
+            >
+              <Sparkles className="w-4 h-4 text-brass" strokeWidth={1.5} />
+              <span>Shortlist universities</span>
+            </button>
+          )}
+
+          {isOrgAdmin && onCreateUniversity && viewMode === 'universities' && (
+            <button
+              type="button"
+              onClick={() => setIsAddUniOpen(true)}
+              className="btn-secondary"
+            >
+              <Plus className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
+              <span>Add university</span>
+            </button>
+          )}
 
           <button type="button" onClick={() => setIsCreateOpen(true)} className="btn-primary">
             <Plus className="w-4 h-4 text-[#141415]" strokeWidth={1.5} />
@@ -517,7 +606,7 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
             );
           })}
         </div>
-      ) : (
+      ) : viewMode === 'table' ? (
         /* Table View */
         <div className="bg-surface-card border border-hairline rounded-xl overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
@@ -585,7 +674,151 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
             </tbody>
           </table>
         </div>
-      )}
+      ) : (() => {
+        const grouped = new Map<string, ApplicationRecord[]>();
+        for (const app of filtered) {
+          const key = app.institutionName;
+          grouped.set(key, [...(grouped.get(key) || []), app]);
+        }
+        for (const uni of universities) {
+          if (filterCountry !== 'all' && uni.country !== filterCountry) continue;
+          if (searchQuery && !uni.name.toLowerCase().includes(searchQuery.toLowerCase())) continue;
+          if (!grouped.has(uni.name)) grouped.set(uni.name, []);
+        }
+        const entries = Array.from(grouped.entries()).sort((a, b) => b[1].length - a[1].length);
+
+        return (
+          <div className="space-y-4">
+            {entries.map(([uniName, uniApps]) => {
+              const catalogUni = universities.find(
+                (u) => u.name.toLowerCase() === uniName.toLowerCase()
+              );
+              const offerCount = uniApps.filter(
+                (a) =>
+                  a.status === 'conditional_offer' ||
+                  a.status === 'unconditional_offer' ||
+                  a.status === 'enrolled'
+              ).length;
+              const enrolledCount = uniApps.filter((a) => a.status === 'enrolled').length;
+
+              return (
+                <div
+                  key={uniName}
+                  className="p-5 rounded-xl bg-surface-card border border-hairline space-y-4"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-hairline">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h3 className="text-base font-medium text-ink-primary">{uniName}</h3>
+                        {catalogUni?.isPartner && (
+                          <VerificationStamp tone="brass" label="Partner university" />
+                        )}
+                        <span className="text-xs text-ink-muted">
+                          {catalogUni?.country || uniApps[0]?.country || 'International'}
+                          {catalogUni?.city ? ` · ${catalogUni.city}` : ''}
+                        </span>
+                      </div>
+                      {catalogUni?.programs && catalogUni.programs.length > 0 && (
+                        <p className="text-xs text-ink-secondary mt-1 truncate">
+                          Catalog programs:{' '}
+                          {catalogUni.programs
+                            .map(
+                              (p) =>
+                                `${p.name}${p.minIelts ? ` (IELTS ${p.minIelts})` : ''}${
+                                  p.minGpa ? ` · GPA ${p.minGpa}` : ''
+                                }`
+                            )
+                            .join(' | ')}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0 text-xs font-mono">
+                      <span className="px-2.5 py-1 rounded-md bg-surface-deep border border-hairline text-ink-primary">
+                        {uniApps.length} applicant{uniApps.length === 1 ? '' : 's'}
+                      </span>
+                      <span className="px-2.5 py-1 rounded-md bg-surface-deep border border-hairline text-tone-positive">
+                        {offerCount} offer{offerCount === 1 ? '' : 's'}
+                      </span>
+                      {enrolledCount > 0 && (
+                        <span className="px-2.5 py-1 rounded-md bg-surface-deep border border-brass-border text-brass">
+                          {enrolledCount} enrolled
+                        </span>
+                      )}
+                      {catalogUni?.portalUrl && (
+                        <a
+                          href={catalogUni.portalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-secondary h-8 px-2.5 text-xs"
+                        >
+                          <span>Portal</span>
+                          <ExternalLink className="w-3.5 h-3.5 text-ink-muted" strokeWidth={1.5} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {uniApps.length === 0 ? (
+                    <div className="text-xs text-ink-muted flex items-center justify-between">
+                      <span>No active applications yet for this intake.</span>
+                      {onBatchCreateApplications && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShortlistCandidateId(candidates[0]?.id || '');
+                            setShortlistSelectedKeys(
+                              catalogUni?.programs[0]
+                                ? [`${catalogUni.id}::${catalogUni.programs[0].id}`]
+                                : []
+                            );
+                            setIsShortlistOpen(true);
+                          }}
+                          className="text-brass hover:underline font-medium"
+                        >
+                          + Shortlist student here
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {uniApps.map((app) => {
+                        const cand = candidates.find((c) => c.id === app.candidateId);
+                        const meta = STATUS_META[app.status] || STATUS_META.draft;
+                        return (
+                          <div
+                            key={app.id}
+                            onClick={() => setSelectedAppId(app.id)}
+                            className="p-3.5 rounded-lg bg-surface-deep border border-hairline hover:border-hairline-strong cursor-pointer space-y-2 transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-ink-primary truncate">
+                                  {cand
+                                    ? `${cand.personal.legalGivenName} ${cand.personal.familyName}`
+                                    : 'Candidate'}
+                                </p>
+                                <p className="text-[11px] text-ink-secondary truncate">
+                                  {app.programName}
+                                </p>
+                              </div>
+                              <VerificationStamp tone={meta.tone} label={meta.label} />
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] font-mono text-ink-muted">
+                              <span>{app.intake || '2027 intake'}</span>
+                              {app.deadline && <span>Due {app.deadline}</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Rich Application Detail Workspace Modal */}
       {selectedApp && (
@@ -1101,6 +1334,122 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
                 </div>
               </div>
 
+              {universities.length > 0 && (() => {
+                const chosenUni = universities.find((u) => u.id === selectedCatalogUniId);
+                const chosenProg = chosenUni?.programs.find((p) => p.id === selectedCatalogProgId);
+                const chosenCand = candidates.find((c) => c.id === candidateId);
+                const eligibility =
+                  chosenCand && chosenProg ? evaluateEligibility(chosenCand, chosenProg) : null;
+
+                return (
+                  <div className="p-3.5 rounded-xl bg-surface-deep border border-hairline space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-ink-primary flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-brass" strokeWidth={1.5} />
+                        <span>Quick-fill from university catalog</span>
+                      </span>
+                      {eligibility && (
+                        <VerificationStamp
+                          tone={
+                            eligibility.status === 'eligible'
+                              ? 'positive'
+                              : eligibility.status === 'borderline'
+                                ? 'negative'
+                                : 'brass'
+                          }
+                          label={
+                            eligibility.status === 'eligible'
+                              ? 'Meets entry requirements'
+                              : eligibility.status === 'borderline'
+                                ? 'Borderline / check reqs'
+                                : 'Check missing scores'
+                          }
+                        />
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <select
+                        value={selectedCatalogUniId}
+                        onChange={(e) => {
+                          const uid = e.target.value;
+                          setSelectedCatalogUniId(uid);
+                          const uni = universities.find((u) => u.id === uid);
+                          if (uni) {
+                            setInstitutionName(uni.name);
+                            setCountry(uni.country);
+                            if (uni.portalUrl) setPortalUrl(uni.portalUrl);
+                            const p = uni.programs[0];
+                            if (p) {
+                              setSelectedCatalogProgId(p.id);
+                              setProgramName(p.name);
+                              setDegreeLevel(p.degreeLevel);
+                              if (p.intake) setIntake(p.intake);
+                              if (p.deadline) setDeadline(p.deadline);
+                              if (p.tuitionFee) setTuitionFee(p.tuitionFee);
+                              if (p.applicationFee) setApplicationFee(p.applicationFee);
+                            } else {
+                              setSelectedCatalogProgId('');
+                            }
+                          }
+                        }}
+                        className="field-input h-8 text-xs"
+                      >
+                        <option value="">Choose catalog university...</option>
+                        {universities.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} ({u.country})
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={selectedCatalogProgId}
+                        disabled={!chosenUni}
+                        onChange={(e) => {
+                          const pid = e.target.value;
+                          setSelectedCatalogProgId(pid);
+                          const p = chosenUni?.programs.find((pr) => pr.id === pid);
+                          if (p) {
+                            setProgramName(p.name);
+                            setDegreeLevel(p.degreeLevel);
+                            if (p.intake) setIntake(p.intake);
+                            if (p.deadline) setDeadline(p.deadline);
+                            if (p.tuitionFee) setTuitionFee(p.tuitionFee);
+                            if (p.applicationFee) setApplicationFee(p.applicationFee);
+                          }
+                        }}
+                        className="field-input h-8 text-xs"
+                      >
+                        <option value="">Choose program...</option>
+                        {(chosenUni?.programs || []).map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p.degreeLevel})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {eligibility && eligibility.checks.length > 0 && (
+                      <div className="flex flex-wrap gap-2 text-[11px] font-mono">
+                        {eligibility.checks.map((chk, idx) => (
+                          <span
+                            key={idx}
+                            className={`px-2 py-0.5 rounded border ${
+                              chk.met === true
+                                ? 'border-tone-positive/30 text-tone-positive bg-surface-card'
+                                : chk.met === false
+                                  ? 'border-tone-negative/30 text-tone-negative bg-surface-card'
+                                  : 'border-hairline text-ink-muted bg-surface-card'
+                            }`}
+                          >
+                            {chk.label}: {chk.detail}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-ink-secondary mb-1.5">University name *</label>
@@ -1257,6 +1606,364 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
                 </button>
                 <button type="submit" className="btn-primary">
                   Create application
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Shortlist Universities Modal */}
+      {isShortlistOpen && onBatchCreateApplications && (() => {
+        const targetCand = candidates.find((c) => c.id === shortlistCandidateId) || candidates[0];
+        return (
+          <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+            <div className="bg-surface-card border border-hairline-strong rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+              <div className="h-14 px-6 border-b border-hairline flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-brass" strokeWidth={1.5} />
+                  <h3 className="text-base font-medium text-ink-primary">
+                    Shortlist universities for student
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsShortlistOpen(false)}
+                  className="h-8 w-8 rounded-lg text-ink-muted hover:text-ink-primary hover:bg-surface-raised inline-flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" strokeWidth={1.5} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 flex-1 overflow-y-auto text-sm">
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1.5">Select student *</label>
+                  <select
+                    value={shortlistCandidateId}
+                    onChange={(e) => setShortlistCandidateId(e.target.value)}
+                    className="field-input"
+                  >
+                    {candidates.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.personal.legalGivenName} {c.personal.familyName} ({c.personal.nationality})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2.5">
+                  <p className="text-xs text-ink-secondary">
+                    Select one or more university programs (live eligibility shown per student):
+                  </p>
+                  {universities.map((uni) => (
+                    <div
+                      key={uni.id}
+                      className="p-3.5 rounded-xl bg-surface-deep border border-hairline space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-ink-primary">
+                          {uni.name}{' '}
+                          <span className="text-ink-muted font-normal">· {uni.country}</span>
+                        </span>
+                        {uni.isPartner && <VerificationStamp tone="brass" label="Partner" />}
+                      </div>
+                      <div className="space-y-1.5">
+                        {uni.programs.map((prog) => {
+                          const key = `${uni.id}::${prog.id}`;
+                          const checked = shortlistSelectedKeys.includes(key);
+                          const elig = targetCand ? evaluateEligibility(targetCand, prog) : null;
+                          return (
+                            <button
+                              key={prog.id}
+                              type="button"
+                              onClick={() =>
+                                setShortlistSelectedKeys((prev) =>
+                                  checked ? prev.filter((k) => k !== key) : [...prev, key]
+                                )
+                              }
+                              className={`w-full p-2.5 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors ${
+                                checked
+                                  ? 'bg-surface-raised border-brass'
+                                  : 'bg-surface-card border-hairline hover:border-hairline-strong'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-ink-primary truncate">
+                                  {prog.name}
+                                </p>
+                                <p className="text-[11px] font-mono text-ink-muted truncate">
+                                  {prog.degreeLevel}
+                                  {prog.intake ? ` · ${prog.intake}` : ''}
+                                  {prog.tuitionFee ? ` · ${prog.tuitionFee}` : ''}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {elig && (
+                                  <VerificationStamp
+                                    tone={
+                                      elig.status === 'eligible'
+                                        ? 'positive'
+                                        : elig.status === 'borderline'
+                                          ? 'negative'
+                                          : 'brass'
+                                    }
+                                    label={
+                                      elig.status === 'eligible'
+                                        ? 'Eligible'
+                                        : elig.status === 'borderline'
+                                          ? 'Borderline'
+                                          : 'Check reqs'
+                                    }
+                                  />
+                                )}
+                                <CheckCircle2
+                                  className={`w-4 h-4 ${
+                                    checked ? 'text-brass' : 'text-ink-muted/30'
+                                  }`}
+                                  strokeWidth={1.5}
+                                />
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="px-6 py-4 border-t border-hairline flex items-center justify-between gap-3 shrink-0">
+                <span className="text-xs font-mono text-ink-muted">
+                  {shortlistSelectedKeys.length} program{shortlistSelectedKeys.length === 1 ? '' : 's'} selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsShortlistOpen(false)}
+                    className="btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={shortlistBusy || shortlistSelectedKeys.length === 0 || !targetCand}
+                    onClick={async () => {
+                      if (!targetCand) return;
+                      setShortlistBusy(true);
+                      try {
+                        const items = shortlistSelectedKeys
+                          .map((key) => {
+                            const [uid, pid] = key.split('::');
+                            const uni = universities.find((u) => u.id === uid);
+                            const prog = uni?.programs.find((p) => p.id === pid);
+                            if (!uni || !prog) return null;
+                            return {
+                              institutionName: uni.name,
+                              programName: prog.name,
+                              degreeLevel: prog.degreeLevel,
+                              country: uni.country,
+                              intake: prog.intake,
+                              deadline: prog.deadline,
+                              portalUrl: uni.portalUrl,
+                              applicationFee: prog.applicationFee,
+                              tuitionFee: prog.tuitionFee,
+                              requiredDocs: prog.requiredDocs,
+                            };
+                          })
+                          .filter(Boolean) as any[];
+                        if (items.length > 0) {
+                          await onBatchCreateApplications({
+                            candidateId: targetCand.id,
+                            items,
+                          });
+                        }
+                        setIsShortlistOpen(false);
+                      } finally {
+                        setShortlistBusy(false);
+                      }
+                    }}
+                    className="btn-primary"
+                  >
+                    {shortlistBusy
+                      ? 'Creating...'
+                      : `Create ${shortlistSelectedKeys.length} application${
+                          shortlistSelectedKeys.length === 1 ? '' : 's'
+                        }`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Add Custom Partner University Modal */}
+      {isAddUniOpen && onCreateUniversity && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+          <div className="bg-surface-card border border-hairline-strong rounded-2xl w-full max-w-lg overflow-hidden">
+            <div className="h-14 px-6 border-b border-hairline flex items-center justify-between">
+              <h3 className="text-base font-medium text-ink-primary">Add university to catalog</h3>
+              <button
+                type="button"
+                onClick={() => setIsAddUniOpen(false)}
+                className="h-8 w-8 rounded-lg text-ink-muted hover:text-ink-primary hover:bg-surface-raised inline-flex items-center justify-center"
+              >
+                <X className="w-4 h-4" strokeWidth={1.5} />
+              </button>
+            </div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await onCreateUniversity({
+                  name: uName.trim(),
+                  country: uCountry.trim(),
+                  city: uCity.trim() || undefined,
+                  portalUrl: uPortalUrl.trim() || undefined,
+                  isPartner: true,
+                  programs: [
+                    {
+                      id: `prog-${Date.now()}`,
+                      name: uProgName.trim() || 'MSc Computer Science',
+                      degreeLevel: uProgDegree || "Master's",
+                      intake: uProgIntake.trim() || undefined,
+                      deadline: uProgDeadline || undefined,
+                      tuitionFee: uProgTuition.trim() || undefined,
+                      minGpa: uProgMinGpa ? Number(uProgMinGpa) : undefined,
+                      minIelts: uProgMinIelts ? Number(uProgMinIelts) : undefined,
+                      requiredDocs: ['passport', 'transcript', 'degree', 'english_test', 'cv'],
+                    },
+                  ],
+                });
+                setUName('');
+                setUCity('');
+                setUPortalUrl('');
+                setUProgName('');
+                setUProgTuition('');
+                setIsAddUniOpen(false);
+              }}
+              className="p-6 space-y-3.5 text-sm max-h-[80vh] overflow-y-auto"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1">University name *</label>
+                  <input
+                    required
+                    value={uName}
+                    onChange={(e) => setUName(e.target.value)}
+                    placeholder="University of Glasgow"
+                    className="field-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1">Country *</label>
+                  <input
+                    required
+                    value={uCountry}
+                    onChange={(e) => setUCountry(e.target.value)}
+                    className="field-input"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1">City</label>
+                  <input
+                    value={uCity}
+                    onChange={(e) => setUCity(e.target.value)}
+                    placeholder="Glasgow"
+                    className="field-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1">Portal URL</label>
+                  <input
+                    value={uPortalUrl}
+                    onChange={(e) => setUPortalUrl(e.target.value)}
+                    placeholder="https://apply.gla.ac.uk"
+                    className="field-input font-mono text-xs"
+                  />
+                </div>
+              </div>
+              <div className="pt-2 border-t border-hairline grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1">Primary program *</label>
+                  <input
+                    required
+                    value={uProgName}
+                    onChange={(e) => setUProgName(e.target.value)}
+                    placeholder="MSc Data Science"
+                    className="field-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1">Degree level</label>
+                  <select
+                    value={uProgDegree}
+                    onChange={(e) => setUProgDegree(e.target.value as any)}
+                    className="field-input"
+                  >
+                    <option value="Master's">Master's</option>
+                    <option value="Bachelor's">Bachelor's</option>
+                    <option value="Doctorate">Doctorate</option>
+                    <option value="Foundation">Foundation</option>
+                    <option value="Diploma">Diploma</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1">Intake</label>
+                  <input
+                    value={uProgIntake}
+                    onChange={(e) => setUProgIntake(e.target.value)}
+                    className="field-input text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1">Deadline</label>
+                  <input
+                    type="date"
+                    value={uProgDeadline}
+                    onChange={(e) => setUProgDeadline(e.target.value)}
+                    className="field-input font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1">Min GPA</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={uProgMinGpa}
+                    onChange={(e) => setUProgMinGpa(e.target.value)}
+                    className="field-input font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1">Min IELTS</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={uProgMinIelts}
+                    onChange={(e) => setUProgMinIelts(e.target.value)}
+                    className="field-input font-mono text-xs"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-ink-secondary mb-1">Tuition fee</label>
+                <input
+                  value={uProgTuition}
+                  onChange={(e) => setUProgTuition(e.target.value)}
+                  placeholder="GBP 31,800 / yr"
+                  className="field-input font-mono text-xs"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-3 border-t border-hairline">
+                <button type="button" onClick={() => setIsAddUniOpen(false)} className="btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Save university
                 </button>
               </div>
             </form>

@@ -1074,6 +1074,123 @@ app.get('/api/applications', async (req: AuthRequest, res) => {
   }
 });
 
+// University & Program Catalog Endpoints
+app.get('/api/universities', async (_req, res) => {
+  try {
+    const items = await store.listUniversities();
+    res.json(items);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/universities', async (req: AuthRequest, res) => {
+  try {
+    if (!(await requireOrgAdmin(req, res))) return;
+    if (!req.body?.name || !req.body?.country) {
+      return res.status(400).json({ error: 'University name and country are required' });
+    }
+    const saved = await store.saveUniversity(req.body);
+    res.status(201).json(saved);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/universities/:id', async (req: AuthRequest, res) => {
+  try {
+    if (!(await requireOrgAdmin(req, res))) return;
+    const ok = await store.deleteUniversity(req.params.id as string);
+    if (!ok) return res.status(404).json({ error: 'University not found' });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Batch Shortlist: Create Multiple Applications for One Student in One Request
+app.post('/api/applications/batch', async (req: AuthRequest, res) => {
+  try {
+    const { candidateId, items } = req.body || {};
+    if (!candidateId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'candidateId and at least one university program are required' });
+    }
+    const candidate = await store.getCandidate(String(candidateId));
+    if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+
+    const visible = await filterCandidatesForUser(req, [candidate]);
+    if (visible.length === 0) {
+      return res.status(403).json({ error: 'Access denied for this candidate' });
+    }
+
+    const now = new Date().toISOString();
+    const actorProfile = req.user?.id ? await store.getUserProfile(req.user.id) : null;
+    const actorName = actorProfile?.fullName || 'Consultant';
+    const candDocs = await store.listDocuments(candidate.id);
+    const created: ApplicationRecord[] = [];
+
+    for (const item of items) {
+      const reqCats: DocumentCategory[] =
+        Array.isArray(item.requiredDocs) && item.requiredDocs.length > 0
+          ? item.requiredDocs
+          : ['passport', 'transcript', 'english_test'];
+
+      const checklist = reqCats.map((cat) => {
+        const matched = candDocs.find((d) => d.category === cat);
+        return {
+          id: crypto.randomUUID(),
+          category: cat,
+          label: cat.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()),
+          required: true,
+          submitted: Boolean(matched),
+          documentId: matched?.id,
+        };
+      });
+
+      const appRecord = await store.saveApplication({
+        id: crypto.randomUUID(),
+        organizationId: candidate.organizationId,
+        candidateId: candidate.id,
+        institutionName: String(item.institutionName || 'University'),
+        programName: String(item.programName || 'Degree Program'),
+        degreeLevel: item.degreeLevel || "Master's",
+        country: String(item.country || 'United Kingdom'),
+        intake: item.intake ? String(item.intake) : undefined,
+        deadline: item.deadline ? String(item.deadline) : undefined,
+        portalUrl: item.portalUrl ? String(item.portalUrl) : undefined,
+        applicationFee: item.applicationFee ? String(item.applicationFee) : undefined,
+        tuitionFee: item.tuitionFee ? String(item.tuitionFee) : undefined,
+        assignedConsultantId: candidate.assignedConsultantId || actorProfile?.id,
+        countryTeamId: candidate.countryTeamId,
+        status: 'preparing_documents',
+        priority: 'medium',
+        applicationFeeStatus: 'unpaid',
+        scholarshipStatus: 'none',
+        casStatus: 'not_started',
+        visaStatus: 'not_started',
+        documentChecklist: checklist,
+        createdAt: now,
+        updatedAt: now,
+        lastActivityAt: now,
+        timeline: [
+          {
+            id: `tl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: now,
+            actor: actorName,
+            type: 'status',
+            text: `Shortlisted ${item.institutionName} (${item.programName})`,
+          },
+        ],
+      });
+      created.push(appRecord);
+    }
+
+    res.status(201).json(created);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.post('/api/applications', async (req: AuthRequest, res) => {
   try {
     const now = new Date().toISOString();

@@ -23,6 +23,7 @@ import {
   UserProfile,
   CountryTeam,
   DocumentCategory,
+  UniversityCatalogItem,
 } from 'admitpilot-shared';
 
 export const App: React.FC = () => {
@@ -37,6 +38,7 @@ export const App: React.FC = () => {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [teamMembers, setTeamMembers] = useState<UserProfile[]>([]);
   const [countryTeams, setCountryTeams] = useState<CountryTeam[]>([]);
+  const [universities, setUniversities] = useState<UniversityCatalogItem[]>([]);
   const [storageStatus, setStorageStatus] = useState<{
     engine?: 'supabase_postgres' | 'local_json';
     connected?: boolean;
@@ -95,7 +97,7 @@ export const App: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [health, cands, apps, settings, me, org, members, desks] = await Promise.all([
+      const [health, cands, apps, settings, me, org, members, desks, unis] = await Promise.all([
         api.checkHealth().catch(() => null),
         api.getCandidates(),
         api.getApplications(),
@@ -109,6 +111,7 @@ export const App: React.FC = () => {
         api.getOrganization().catch(() => null),
         api.getTeamMembers().catch(() => []),
         api.getCountryTeams().catch(() => []),
+        api.getUniversities().catch(() => []),
       ]);
       if (health) {
         setStorageStatus({
@@ -127,6 +130,7 @@ export const App: React.FC = () => {
       setOrganization(org);
       setTeamMembers(members);
       setCountryTeams(desks);
+      setUniversities(unis);
 
       if (cands.length > 0) {
         const target = selectedCandidate
@@ -367,6 +371,36 @@ export const App: React.FC = () => {
   const handleDeleteApplication = async (appId: string) => {
     await api.deleteApplication(appId);
     setApplications((prev) => prev.filter((a) => a.id !== appId));
+  };
+
+  const handleBatchCreateApplications = async (payload: {
+    candidateId: string;
+    items: Array<{
+      institutionName: string;
+      programName: string;
+      degreeLevel?: ApplicationRecord['degreeLevel'];
+      country: string;
+      intake?: string;
+      deadline?: string;
+      portalUrl?: string;
+      applicationFee?: string;
+      tuitionFee?: string;
+      requiredDocs?: DocumentCategory[];
+    }>;
+  }) => {
+    const created = await api.batchCreateApplications(payload);
+    setApplications((prev) => [...created, ...prev]);
+  };
+
+  const handleCreateUniversity = async (
+    uni: Partial<UniversityCatalogItem> & { name: string; country: string }
+  ) => {
+    const saved = await api.createUniversity(uni);
+    setUniversities((prev) => {
+      const idx = prev.findIndex((u) => u.id === saved.id);
+      if (idx >= 0) return prev.map((u) => (u.id === saved.id ? saved : u));
+      return [saved, ...prev];
+    });
   };
 
   const handleSaveAISettings = async (newSettings: Partial<AISettings>) => {
@@ -767,7 +801,11 @@ export const App: React.FC = () => {
                     applications={scopedApplications}
                     candidates={scopedCandidates}
                     countryTeams={countryTeams}
+                    universities={universities}
+                    isOrgAdmin={currentUser?.role === 'org_admin'}
                     onCreateApplication={handleCreateApplication}
+                    onBatchCreateApplications={handleBatchCreateApplications}
+                    onCreateUniversity={handleCreateUniversity}
                     onUpdateApplication={handleUpdateApplication}
                     onDeleteApplication={handleDeleteApplication}
                   />

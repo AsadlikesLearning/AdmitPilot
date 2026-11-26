@@ -461,3 +461,39 @@ export interface AISettings {
   updatedAt?: string;
 }
 
+export interface UniversityProgram {
+  id: string;
+  name: string;
+  degreeLevel: "Bachelor's" | "Master's" | 'Doctorate' | 'Foundation' | 'Diploma' | 'Other';
+  intake?: string;
+  deadline?: string;
+  tuitionFee?: string;
+  applicationFee?: string;
+  minGpa?: number; // 4.0 scale
+  minIelts?: number;
+  requiredDocs?: DocumentCategory[];
+}
+
+export interface UniversityCatalogItem {
+  id: string;
+  organizationId: string;
+  name: string;
+  country: string;
+  city?: string;
+  portalUrl?: string;
+  isPartner?: boolean;
+  programs: UniversityProgram[];
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface EligibilityCheckResult {
+  status: 'eligible' | 'borderline' | 'check_required';
+  checks: Array<{
+    label: string;
+    met: boolean | null;
+    detail: string;
+  }>;
+}
+

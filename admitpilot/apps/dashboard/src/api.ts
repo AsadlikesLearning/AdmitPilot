@@ -8,6 +8,7 @@ import {
   UserProfile,
   CountryTeam,
   DocumentCategory,
+  UniversityCatalogItem,
 } from 'admitpilot-shared';
 
 const API_BASE = '/api';
@@ -406,6 +407,58 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete application');
+    return res.json();
+  },
+
+  batchCreateApplications: async (payload: {
+    candidateId: string;
+    items: Array<{
+      institutionName: string;
+      programName: string;
+      degreeLevel?: ApplicationRecord['degreeLevel'];
+      country: string;
+      intake?: string;
+      deadline?: string;
+      portalUrl?: string;
+      applicationFee?: string;
+      tuitionFee?: string;
+      requiredDocs?: DocumentCategory[];
+    }>;
+  }): Promise<ApplicationRecord[]> => {
+    const res = await authFetch(`${API_BASE}/applications/batch`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to shortlist universities');
+    }
+    return res.json();
+  },
+
+  // University & Program Catalog
+  getUniversities: async (): Promise<UniversityCatalogItem[]> => {
+    const res = await authFetch(`${API_BASE}/universities`);
+    if (!res.ok) throw new Error('Failed to fetch university catalog');
+    return res.json();
+  },
+
+  createUniversity: async (
+    item: Partial<UniversityCatalogItem> & { name: string; country: string }
+  ): Promise<UniversityCatalogItem> => {
+    const res = await authFetch(`${API_BASE}/universities`, {
+      method: 'POST',
+      body: JSON.stringify(item),
+    });
+    if (!res.ok) throw new Error('Failed to save university');
+    return res.json();
+  },
+
+  deleteUniversity: async (id: string): Promise<{ success: boolean }> => {
+    const res = await authFetch(`${API_BASE}/universities/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete university');
     return res.json();
   },
 
