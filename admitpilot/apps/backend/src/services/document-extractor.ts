@@ -717,14 +717,20 @@ export class DocumentExtractorService {
       else if (/doctorate|phd|doctor\s*of\s*philosophy/i.test(normText)) qualLevel = 'Doctorate';
       else if (/associate/i.test(normText)) qualLevel = 'Associate';
       else if (/diploma/i.test(normText)) qualLevel = 'Diploma';
-      else if (/high\s*school|higher\s*secondary|hsc|hssc|a-level|intermediate|f\.sc/i.test(normText))
+      else if (
+        /high\s*school|higher\s*secondary|secondary\s*school|\bhsc\b|\bhssc\b|\bssc\b|matric|a-?levels?|o-?levels?|gce|igcse|intermediate|\bf\.?sc\b|\bics\b|\bi\.?com\b/i.test(
+          normText
+        )
+      ) {
         qualLevel = 'High School';
+      }
       addField('qualificationLevel', qualLevel, 0.91, qualLevel);
 
       const degMatch =
-        text.match(/(?:degree\s*(?:conferred|awarded|title|of)|conferred\s*the\s*degree\s*of|program(?:\s*of\s*study)?|qualification)[.:\s]+([A-Za-z\s()&-]{5,75})/i) ||
+        text.match(/(?:degree\s*(?:conferred|awarded|title|of)|conferred\s*the\s*degree\s*of|program(?:\s*of\s*study)?|qualification|examination)[.:\s]+([A-Za-z0-9\s()&-]{4,75})/i) ||
         normText.match(/\b((?:Bachelor|Master|Doctor)\s+of\s+(?:Science|Arts|Engineering|Business\s+Administration|Philosophy|Technology|Laws|Computer\s+Science|[A-Za-z]+)(?:\s+in\s+[A-Za-z\s&]{2,40})?)(?=\s*(?:\(Transcript\)|of\s+above|issued\s+by|from\b|with\s+Registration|,|\n|$))/i) ||
-        normText.match(/\b((?:BS|B\.S\.|BSc|B\.Sc\.|BE|B\.E\.|BBA|MS|M\.S\.|MSc|MBA)\s+(?:in\s+)?[A-Za-z\s&]{3,40})(?=\s*(?:\(|of\s+above|issued\s+by|,|\n|$))/);
+        normText.match(/\b((?:BS|B\.S\.|BSc|B\.Sc\.|BE|B\.E\.|BBA|MS|M\.S\.|MSc|MBA)\s+(?:in\s+)?[A-Za-z\s&]{3,40})(?=\s*(?:\(|of\s+above|issued\s+by|,|\n|$))/) ||
+        normText.match(/\b(F\.?Sc\.?\s*\([^)]{2,30}\)|Higher\s+Secondary\s+School\s+Certificate(?:\s*\([^)]+\))?|Secondary\s+School\s+Certificate|GCE\s+(?:Ordinary|Advanced|O|A)\s*Levels?|Cambridge\s+(?:O|A)\s*Levels?)/i);
       if (degMatch) {
         const cleanDeg = cleanText(
           degMatch[1]
@@ -757,15 +763,31 @@ export class DocumentExtractorService {
         normText.match(/\b([0-4]\.[0-9]{2})\s*\/\s*(4\.00?|5\.00?)\b/);
       if (gpaMatch) {
         addField('gpa', gpaMatch[1], 0.96, gpaMatch[0]);
-        if (gpaMatch[2]) addField('gradingScale', gpaMatch[2], 0.95, gpaMatch[0]);
+        if (gpaMatch[2]) {
+          addField('gradingScale', gpaMatch[2], 0.95, gpaMatch[0]);
+        } else {
+          const scaleMatch =
+            normText.match(/(?:out\s*of|grading\s*scale|scale\s*(?:of|:)?)\s*(4\.00?|5\.00?|10\.00?)/i) ||
+            normText.match(/\/\s*(4\.00?|5\.00?)\b/);
+          if (scaleMatch) {
+            addField('gradingScale', scaleMatch[1], 0.93, scaleMatch[0]);
+          }
+        }
       }
 
-      const marksMatch = normText.match(
-        /(?:marks\s*obtained|obtained\s*marks|total\s*marks)[.:\s]*([0-9]{3,4})\s*(?:\/|out\s*of)\s*([0-9]{3,4})/i
-      );
+      const marksMatch =
+        normText.match(
+          /(?:marks\s*obtained|obtained\s*marks|total\s*marks|aggregate\s*marks?)[.:\s]*([0-9]{3,4})\s*(?:\/|out\s*of)\s*([0-9]{3,4})/i
+        ) ||
+        normText.match(/\b([0-9]{3,4})\s*(?:\/|out\s*of)\s*(1100|1050|1000|850|800|550|500)\b/i);
       if (marksMatch) {
         addField('obtainedMarks', marksMatch[1], 0.94, marksMatch[0]);
         addField('totalMarks', marksMatch[2], 0.94, marksMatch[0]);
+      } else {
+        const obtOnly = normText.match(/(?:marks\s*obtained|obtained\s*marks)[.:\s]+([0-9]{3,4})\b/i);
+        const totOnly = normText.match(/(?:total\s*marks|max(?:imum)?\s*marks)[.:\s]+([0-9]{3,4})\b/i);
+        if (obtOnly) addField('obtainedMarks', obtOnly[1], 0.92, obtOnly[0]);
+        if (totOnly) addField('totalMarks', totOnly[1], 0.92, totOnly[0]);
       }
 
       const pctMatch = normText.match(/(?:percentage|overall\s*percentage|overall\s*marks)[.:\s]*([0-9]{2}(?:\.[0-9]{1,2})?)\s*%/i);

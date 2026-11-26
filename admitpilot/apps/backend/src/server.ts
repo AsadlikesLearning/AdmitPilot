@@ -664,7 +664,7 @@ async function processAndMergeDocumentFile(
 
   if (
     (extraction.category === 'transcript' || extraction.category === 'degree') &&
-    (f.degreeTitle || f.gpa || f.institution)
+    (f.degreeTitle || f.gpa || f.institution || f.obtainedMarks || f.totalMarks)
   ) {
     const existingEdu = candidate.education[0];
     if (
@@ -675,9 +675,11 @@ async function processAndMergeDocumentFile(
       if (f.gpa) existingEdu.gpa = String(f.gpa);
       if (f.gradingScale) existingEdu.gradingScale = String(f.gradingScale);
       if (f.percentage) existingEdu.percentage = String(f.percentage);
+      if (f.obtainedMarks) existingEdu.obtainedMarks = String(f.obtainedMarks);
+      if (f.totalMarks) existingEdu.totalMarks = String(f.totalMarks);
       if (f.awardDate) existingEdu.awardDate = String(f.awardDate);
       if (f.institution) existingEdu.institution = String(f.institution);
-    } else if (f.degreeTitle || f.institution) {
+    } else if (f.degreeTitle || f.institution || f.obtainedMarks) {
       candidate.education = [
         {
           id: crypto.randomUUID(),
@@ -690,6 +692,8 @@ async function processAndMergeDocumentFile(
           gpa: f.gpa ? String(f.gpa) : undefined,
           gradingScale: f.gradingScale ? String(f.gradingScale) : undefined,
           percentage: f.percentage ? String(f.percentage) : undefined,
+          obtainedMarks: f.obtainedMarks ? String(f.obtainedMarks) : undefined,
+          totalMarks: f.totalMarks ? String(f.totalMarks) : undefined,
           status: extraction.category === 'degree' || f.awardDate ? 'Completed' : 'Enrolled',
         },
         ...candidate.education,

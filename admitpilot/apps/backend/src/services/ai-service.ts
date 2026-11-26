@@ -536,9 +536,9 @@ export class AIService {
       english_test:
         '{"testType": "IELTS"|"TOEFL"|"PTE"|"Duolingo"|null, "testDate": "YYYY-MM-DD"|null, "expiryDate": "YYYY-MM-DD"|null, "referenceNumber": string|null, "overallScore": string|null, "listening": string|null, "reading": string|null, "writing": string|null, "speaking": string|null}',
       transcript:
-        '{"qualificationLevel": "High School"|"Associate"|"Bachelor\'s"|"Master\'s"|"Doctorate"|"Diploma"|null, "degreeTitle": string|null, "major": string|null, "institution": string|null, "country": string|null, "gpa": string|null, "gradingScale": string|null, "percentage": string|null, "startDate": "YYYY-MM-DD"|null, "endDate": "YYYY-MM-DD"|null, "awardDate": "YYYY-MM-DD"|null}',
+        '{"qualificationLevel": "High School"|"Associate"|"Bachelor\'s"|"Master\'s"|"Doctorate"|"Diploma"|null, "degreeTitle": string|null, "major": string|null, "institution": string|null, "country": string|null, "gpa": string|null, "gradingScale": string|null, "obtainedMarks": string|null, "totalMarks": string|null, "percentage": string|null, "startDate": "YYYY-MM-DD"|null, "endDate": "YYYY-MM-DD"|null, "awardDate": "YYYY-MM-DD"|null}',
       degree:
-        '{"qualificationLevel": "Bachelor\'s"|"Master\'s"|"Doctorate"|"Diploma"|null, "degreeTitle": string|null, "major": string|null, "institution": string|null, "country": string|null, "gpa": string|null, "awardDate": "YYYY-MM-DD"|null}',
+        '{"qualificationLevel": "High School"|"Associate"|"Bachelor\'s"|"Master\'s"|"Doctorate"|"Diploma"|null, "degreeTitle": string|null, "major": string|null, "institution": string|null, "country": string|null, "gpa": string|null, "gradingScale": string|null, "obtainedMarks": string|null, "totalMarks": string|null, "percentage": string|null, "awardDate": "YYYY-MM-DD"|null}',
       cv: '{"email": string|null, "phone": string|null, "city": string|null, "country": string|null, "jobTitle": string|null, "company": string|null, "degreeTitle": string|null, "institution": string|null}',
       sop: '{"targetInstitution": string|null, "targetProgram": string|null, "researchInterests": string|null}',
       lor: '{"recommenderName": string|null, "recommenderTitle": string|null, "recommenderInstitution": string|null, "recommenderEmail": string|null, "relationship": string|null}',
