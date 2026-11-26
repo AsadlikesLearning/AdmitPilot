@@ -230,17 +230,31 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
     new Set([...POPULAR_DESTINATIONS, ...operatingCountries])
   );
 
+  const isOrgAdmin = currentUser?.role === 'org_admin';
+  const roleLabel =
+    currentUser?.role === 'org_admin'
+      ? 'Agency owner'
+      : currentUser?.role === 'manager'
+        ? 'Desk lead'
+        : currentUser?.role === 'reviewer'
+          ? 'Reviewer'
+          : 'Consultant';
+
   const pageTitle =
     mode === 'agency'
       ? 'Agency settings'
       : mode === 'profile'
-        ? 'Admin profile'
+        ? isOrgAdmin
+          ? 'Admin profile'
+          : 'My profile'
         : 'Agency setup & admin profile';
   const pageSubtitle =
     mode === 'agency'
       ? 'Configure your consultancy branding, destination countries, and dossier routing rules'
       : mode === 'profile'
-        ? 'Manage your personal owner/consultant account, credential card, and alert preferences'
+        ? isOrgAdmin
+          ? 'Manage your personal owner/consultant account, credential card, and alert preferences'
+          : 'Manage your personal profile, assigned desk memberships, and alert preferences'
         : 'Configure your consultancy branding, destination countries, routing rules, and owner account';
 
   return (
@@ -479,7 +493,9 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
           >
             <div className="border-b border-hairline pb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-base font-medium text-ink-primary">Owner & admin profile</h2>
+                <h2 className="text-base font-medium text-ink-primary">
+                  {isOrgAdmin ? 'Owner & admin profile' : 'My profile'}
+                </h2>
                 <p className="text-xs text-ink-secondary mt-0.5">
                   Your personal contact details and desk memberships
                 </p>
@@ -605,7 +621,7 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
           {mode !== 'agency' && (
           <div className="rounded-xl bg-surface-card border border-brass-border overflow-hidden shadow-[inset_0_1px_0_rgba(212,168,83,0.14)]">
             <div className="px-5 py-3.5 border-b border-[rgba(212,168,83,0.14)] flex items-center justify-between">
-              <span className="font-mono text-xs text-brass">Agency owner credential</span>
+              <span className="font-mono text-xs text-brass">{roleLabel} credential</span>
               <VerificationStamp tone="positive" label="active" />
             </div>
 
@@ -742,24 +758,26 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
           </div>
           )}
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onOpenTeamDesks}
-              className="btn-secondary flex-1 text-xs h-9"
-            >
-              <Globe className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
-              <span>Country desks</span>
-            </button>
-            <button
-              type="button"
-              onClick={onOpenModelProviders}
-              className="btn-secondary flex-1 text-xs h-9"
-            >
-              <SlidersHorizontal className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
-              <span>Model providers</span>
-            </button>
-          </div>
+          {isOrgAdmin && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onOpenTeamDesks}
+                className="btn-secondary flex-1 text-xs h-9"
+              >
+                <Globe className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
+                <span>Country desks</span>
+              </button>
+              <button
+                type="button"
+                onClick={onOpenModelProviders}
+                className="btn-secondary flex-1 text-xs h-9"
+              >
+                <SlidersHorizontal className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
+                <span>Model providers</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

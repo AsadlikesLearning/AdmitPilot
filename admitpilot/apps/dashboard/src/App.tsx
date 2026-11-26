@@ -74,6 +74,19 @@ export const App: React.FC = () => {
   }, [theme]);
 
   useEffect(() => {
+    if (!currentUser || currentUser.role === 'org_admin') return;
+    setViewScope('assigned');
+    if (
+      currentTab === 'team' ||
+      currentTab === 'country-desks' ||
+      currentTab === 'ai-settings' ||
+      currentTab === 'agency-settings'
+    ) {
+      setCurrentTab('dashboard');
+    }
+  }, [currentUser?.id, currentUser?.role, currentTab]);
+
+  useEffect(() => {
     loadAllData();
   }, []);
 
@@ -478,6 +491,7 @@ export const App: React.FC = () => {
         teamCount={teamMembers.length}
         countryTeamsCount={countryTeams.length}
         organizationName={organization?.name}
+        userRole={currentUser?.role}
       />
 
       {/* Main Content Area */}
@@ -541,28 +555,36 @@ export const App: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setViewScope('assigned')}
-                          className={`h-7 px-3 rounded-lg text-xs transition-colors ${
-                            viewScope === 'assigned'
-                              ? 'bg-surface-raised border border-brass-border text-ink-primary font-medium'
-                              : 'text-ink-secondary hover:text-ink-primary border border-transparent'
-                          }`}
-                        >
-                          My assigned ({assignedCandidates.length})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setViewScope('all')}
-                          className={`h-7 px-3 rounded-lg text-xs transition-colors ${
-                            viewScope === 'all'
-                              ? 'bg-surface-raised border border-brass-border text-ink-primary font-medium'
-                              : 'text-ink-secondary hover:text-ink-primary border border-transparent'
-                          }`}
-                        >
-                          All agency ({candidates.length})
-                        </button>
+                        {currentUser.role === 'org_admin' ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setViewScope('assigned')}
+                              className={`h-7 px-3 rounded-lg text-xs transition-colors ${
+                                viewScope === 'assigned'
+                                  ? 'bg-surface-raised border border-brass-border text-ink-primary font-medium'
+                                  : 'text-ink-secondary hover:text-ink-primary border border-transparent'
+                              }`}
+                            >
+                              My assigned ({assignedCandidates.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setViewScope('all')}
+                              className={`h-7 px-3 rounded-lg text-xs transition-colors ${
+                                viewScope === 'all'
+                                  ? 'bg-surface-raised border border-brass-border text-ink-primary font-medium'
+                                  : 'text-ink-secondary hover:text-ink-primary border border-transparent'
+                              }`}
+                            >
+                              All agency ({candidates.length})
+                            </button>
+                          </>
+                        ) : (
+                          <span className="h-7 px-3 rounded-lg text-xs bg-surface-raised border border-brass-border text-ink-primary font-medium inline-flex items-center">
+                            Assigned to you ({assignedCandidates.length})
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}

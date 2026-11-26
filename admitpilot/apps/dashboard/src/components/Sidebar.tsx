@@ -11,6 +11,8 @@ import {
   Building2,
 } from 'lucide-react';
 
+import { UserRole } from 'admitpilot-shared';
+
 export type NavTab =
   | 'dashboard'
   | 'candidates'
@@ -31,6 +33,7 @@ interface SidebarProps {
   teamCount?: number;
   countryTeamsCount?: number;
   organizationName?: string;
+  userRole?: UserRole;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -41,7 +44,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   teamCount,
   countryTeamsCount,
   organizationName,
+  userRole = 'org_admin',
 }) => {
+  const isOrgAdmin = userRole === 'org_admin';
   const primaryItems: Array<{ id: NavTab; label: string; icon: React.ComponentType<any>; count?: number }> = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
     { id: 'candidates', label: 'Candidates', icon: Users, count: candidateCount },
@@ -50,13 +55,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'testing', label: 'Portal sandbox', icon: FlaskConical },
   ];
 
-  const workspaceItems: Array<{ id: NavTab; label: string; icon: React.ComponentType<any>; count?: number }> = [
-    { id: 'team', label: 'Team', icon: Users, count: teamCount },
-    { id: 'country-desks', label: 'Country desks', icon: Globe, count: countryTeamsCount },
-    { id: 'ai-settings', label: 'Model providers', icon: SlidersHorizontal },
-    { id: 'agency-settings', label: 'Agency settings', icon: Building2 },
-    { id: 'admin-profile', label: 'Admin profile', icon: UserCog },
-  ];
+  const workspaceItems: Array<{ id: NavTab; label: string; icon: React.ComponentType<any>; count?: number }> = isOrgAdmin
+    ? [
+        { id: 'team', label: 'Team', icon: Users, count: teamCount },
+        { id: 'country-desks', label: 'Country desks', icon: Globe, count: countryTeamsCount },
+        { id: 'ai-settings', label: 'Model providers', icon: SlidersHorizontal },
+        { id: 'agency-settings', label: 'Agency settings', icon: Building2 },
+        { id: 'admin-profile', label: 'Admin profile', icon: UserCog },
+      ]
+    : [{ id: 'admin-profile', label: 'My profile', icon: UserCog }];
 
   const renderRow = (item: { id: NavTab; label: string; icon: React.ComponentType<any>; count?: number }) => {
     const Icon = item.icon;

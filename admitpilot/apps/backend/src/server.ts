@@ -147,10 +147,32 @@ app.use((req, _res, next) => {
   setStoreContext(req as any, _res as any, next);
 });
 
+const requireOrgAdmin = async (req: AuthRequest, res: express.Response): Promise<boolean> => {
+  if (req.user?.id) {
+    const profile = await store.getUserProfile(req.user.id);
+    if (profile?.role === 'org_admin') return true;
+  }
+  res.status(403).json({ error: 'Admin access required' });
+  return false;
+};
+
+const filterCandidatesForUser = async (req: AuthRequest, candidates: any[]) => {
+  if (!req.user?.id) return candidates;
+  const actor = await store.getUserProfile(req.user.id);
+  if (!actor || actor.role === 'org_admin') return candidates;
+  const teamIds = new Set(actor.countryTeamIds || []);
+  return candidates.filter((c) => {
+    if (c.assignedConsultantId === actor.id) return true;
+    if (actor.role === 'manager' && c.countryTeamId && teamIds.has(c.countryTeamId)) return true;
+    if (!c.assignedConsultantId && c.countryTeamId && teamIds.has(c.countryTeamId)) return true;
+    return false;
+  });
+};
+
 // -------------------------------------------------------------
 // Candidate Management Endpoints
 // -------------------------------------------------------------
-app.get('/api/candidates', async (req, res) => {
+app.get('/api/candidates', async (req: AuthRequest, res) => {
   try {
     const { search, nationality, status, consultantId, includeArchived } = req.query;
     const candidates = await store.getCandidates({
@@ -160,7 +182,7 @@ app.get('/api/candidates', async (req, res) => {
       consultantId: consultantId ? String(consultantId) : undefined,
       includeArchived: includeArchived === 'true',
     });
-    res.json(candidates);
+    res.json(await filterCandidatesForUser(req, candidates));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -902,10 +924,19 @@ app.post('/api/candidates/:id/reconcile', async (req, res) => {
 // -------------------------------------------------------------
 // Application Tracking Endpoints
 // -------------------------------------------------------------
-app.get('/api/applications', async (req, res) => {
+app.get('/api/applications', async (req: AuthRequest, res) => {
   try {
     const list = await store.listApplications(req.query.candidateId as string);
-    res.json(list);
+    if (!req.user?.id) {
+      return res.json(list);
+    }
+    const actor = await store.getUserProfile(req.user.id);
+    if (!actor || actor.role === 'org_admin') {
+      return res.json(list);
+    }
+    const visibleCandidates = await filterCandidatesForUser(req, await store.getCandidates());
+    const visibleIds = new Set(visibleCandidates.map((c) => c.id));
+    res.json(list.filter((app) => app.assignedConsultantId === actor.id || visibleIds.has(app.candidateId)));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1136,8 +1167,9 @@ app.get('/api/settings/ai', async (_req, res) => {
   }
 });
 
-app.post('/api/settings/ai', async (req, res) => {
+app.post('/api/settings/ai', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     const updated = await store.saveAISettings(req.body);
     aiService.updateSettings(updated);
     res.json(aiService.getPublicSettings());
@@ -1146,8 +1178,9 @@ app.post('/api/settings/ai', async (req, res) => {
   }
 });
 
-app.post('/api/settings/ai/test', async (req, res) => {
+app.post('/api/settings/ai/test', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     const persisted = await store.getAISettings();
     aiService.updateSettings(persisted);
     const result = await aiService.testConnection(req.body);
@@ -1200,8 +1233,9 @@ app.get('/api/organization', async (_req, res) => {
   }
 });
 
-app.put('/api/organization', async (req, res) => {
+app.put('/api/organization', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     const updated = await store.updateOrganization(req.body);
     res.json(updated);
   } catch (err: any) {
@@ -1218,8 +1252,9 @@ app.get('/api/team/members', async (_req, res) => {
   }
 });
 
-app.post('/api/team/members', async (req, res) => {
+app.post('/api/team/members', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     if (!req.body?.email || !req.body?.fullName) {
       return res.status(400).json({ error: 'Full name and email are required' });
     }
@@ -1230,8 +1265,9 @@ app.post('/api/team/members', async (req, res) => {
   }
 });
 
-app.put('/api/team/members/:id', async (req, res) => {
+app.put('/api/team/members/:id', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     const id = req.params.id as string;
     const existing = await store.getUserProfile(id);
     if (!existing) return res.status(404).json({ error: 'Team member not found' });
@@ -1246,8 +1282,9 @@ app.put('/api/team/members/:id', async (req, res) => {
   }
 });
 
-app.post('/api/team/members/:id/credentials', async (req, res) => {
+app.post('/api/team/members/:id/credentials', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     const { password } = req.body || {};
     if (!password || String(password).length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -1262,6 +1299,7 @@ app.post('/api/team/members/:id/credentials', async (req, res) => {
 
 app.delete('/api/team/members/:id', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     const id = req.params.id as string;
     if (toUuid(id) === toUuid(req.user?.id)) {
       return res.status(400).json({ error: 'Cannot delete the currently signed-in admin profile' });
@@ -1283,8 +1321,9 @@ app.get('/api/team/countries', async (_req, res) => {
   }
 });
 
-app.post('/api/team/countries', async (req, res) => {
+app.post('/api/team/countries', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     const { memberIds, ...teamPayload } = req.body;
     if (!teamPayload?.name || !teamPayload?.code) {
       return res.status(400).json({ error: 'Desk name and code are required' });
@@ -1302,8 +1341,9 @@ app.post('/api/team/countries', async (req, res) => {
   }
 });
 
-app.put('/api/team/countries/:id', async (req, res) => {
+app.put('/api/team/countries/:id', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     const id = req.params.id as string;
     const { memberIds, ...teamPayload } = req.body;
     const updated = await store.saveCountryTeam(
@@ -1319,8 +1359,9 @@ app.put('/api/team/countries/:id', async (req, res) => {
   }
 });
 
-app.post('/api/team/countries/:id/members', async (req, res) => {
+app.post('/api/team/countries/:id/members', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     const teamId = req.params.id as string;
     const { userId, action } = req.body as { userId: string; action: 'add' | 'remove' };
     if (!userId || (action !== 'add' && action !== 'remove')) {
@@ -1334,8 +1375,9 @@ app.post('/api/team/countries/:id/members', async (req, res) => {
   }
 });
 
-app.delete('/api/team/countries/:id', async (req, res) => {
+app.delete('/api/team/countries/:id', async (req: AuthRequest, res) => {
   try {
+    if (!(await requireOrgAdmin(req, res))) return;
     const deleted = await store.deleteCountryTeam(req.params.id as string);
     if (!deleted) return res.status(404).json({ error: 'Country desk not found' });
     res.json({ success: true });

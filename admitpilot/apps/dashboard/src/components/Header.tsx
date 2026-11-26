@@ -140,7 +140,11 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenAdminProfile}
-            title="Open admin profile & workspace settings"
+            title={
+              currentUser?.role === 'org_admin'
+                ? 'Open admin profile & workspace settings'
+                : 'Open my profile'
+            }
             className={`h-9 px-2.5 rounded-lg border inline-flex items-center gap-2.5 transition-colors duration-150 ease-quart focus:outline-none ${
               isAdminActive
                 ? 'bg-surface-raised border-brass-border'
