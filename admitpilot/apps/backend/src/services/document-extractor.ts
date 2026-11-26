@@ -366,6 +366,13 @@ export class DocumentExtractorService {
 
     let pos = 0;
     while ((pos = pdfBuffer.indexOf(soi, pos)) !== -1) {
+      // Only extract JPEGs that actually start a PDF stream (right after "stream\r\n" or "stream\n"),
+      // avoiding random 0xFF 0xD8 0xFF byte sequences inside compressed FlateDecode/image streams.
+      const before = pdfBuffer.subarray(Math.max(0, pos - 12), pos).toString('latin1');
+      if (!/stream\r?\n?$/.test(before)) {
+        pos += 3;
+        continue;
+      }
       const nextEndStream = pdfBuffer.indexOf(endStreamToken, pos);
       const searchLimit = nextEndStream !== -1 ? nextEndStream : pdfBuffer.length;
       const slice = pdfBuffer.subarray(pos, searchLimit);
@@ -389,19 +396,27 @@ export class DocumentExtractorService {
 
   private async performOCRBatch(sources: Array<string | Buffer>): Promise<string> {
     if (sources.length === 0) return '';
-    const worker = await createWorker('eng');
+    const worker = await createWorker('eng', 1, {
+      errorHandler: (err) => {
+        console.warn('[AdmitPilot OCR Worker]', err);
+      },
+    });
     try {
       const chunks: string[] = [];
       for (let i = 0; i < sources.length; i++) {
-        const ret = await worker.recognize(sources[i]);
-        const txt = (ret.data.text || '').trim();
-        if (txt) {
-          chunks.push(sources.length > 1 ? `--- Page ${i + 1} ---\n${txt}` : txt);
+        try {
+          const ret = await worker.recognize(sources[i]);
+          const txt = (ret.data.text || '').trim();
+          if (txt) {
+            chunks.push(sources.length > 1 ? `--- Page ${i + 1} ---\n${txt}` : txt);
+          }
+        } catch (pageErr) {
+          console.warn(`[AdmitPilot OCR] Page ${i + 1} skipped:`, (pageErr as Error).message);
         }
       }
       return chunks.join('\n\n');
     } finally {
-      await worker.terminate();
+      await worker.terminate().catch(() => {});
     }
   }
 
@@ -727,9 +742,17 @@ export class DocumentExtractorService {
         }
       }
 
+      // Prefer explicit Cumulative GPA / CGPA (taking the LAST occurrence, which is final CGPA on Page 2 / bottom)
+      const cgpaMatches = Array.from(
+        normText.matchAll(
+          /(?:cumulative\s*(?:grade\s*point\s*average|gpa)|cgpa|final\s*gpa|overall\s*gpa)(?:\s*\([^)]{1,20}\))?[\s:=.\-–]{0,15}([0-9]\.[0-9]{1,3})(?:\s*(?:\/|out\s*of)\s*([0-9](?:\.[0-9]{1,2})?))?/gi
+        )
+      );
+      const lastCgpa = cgpaMatches.length > 0 ? cgpaMatches[cgpaMatches.length - 1] : null;
       const gpaMatch =
+        lastCgpa ||
         normText.match(
-          /(?:cgpa|cumulative\s*gpa|final\s*gpa|overall\s*gpa|sgpa|gpa|grade\s*point\s*average)[.:\s]*([0-9]\.[0-9]{1,3})(?:\s*(?:\/|out\s*of)\s*([0-9](?:\.[0-9]{1,2})?))?/i
+          /(?:sgpa|gpa|grade\s*point\s*average)(?:\s*\([^)]{1,20}\))?[\s:=.\-–]{0,15}([0-9]\.[0-9]{1,3})(?:\s*(?:\/|out\s*of)\s*([0-9](?:\.[0-9]{1,2})?))?/i
         ) ||
         normText.match(/\b([0-4]\.[0-9]{2})\s*\/\s*(4\.00?|5\.00?)\b/);
       if (gpaMatch) {
