@@ -1033,6 +1033,110 @@ app.delete('/api/candidates/:id/documents/:docId', async (req, res) => {
   }
 });
 
+// Record Student / Candidate Payment to Agency (with optional Receipt PDF/Image stored in Supabase)
+app.post('/api/candidates/:id/payments', upload.single('receipt'), async (req: AuthRequest, res) => {
+  try {
+    const candidateId = req.params.id as string;
+    const candidate = await store.getCandidate(candidateId);
+    if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+
+    const visible = await filterCandidatesForUser(req, [candidate]);
+    if (visible.length === 0) {
+      return res.status(403).json({ error: 'Access denied for this candidate' });
+    }
+
+    const { title, amount, paidDate, paymentMethod, referenceNumber, status, notes, id } = req.body || {};
+    if (!title || !amount) {
+      return res.status(400).json({ error: 'Payment title and amount are required' });
+    }
+
+    const now = new Date().toISOString();
+    const actorProfile = req.user?.id ? await store.getUserProfile(req.user.id) : null;
+    let receiptDocument: CandidateDocument | null = null;
+
+    if (req.file) {
+      const docId = crypto.randomUUID();
+      const portalFileName = buildPortalFileName(candidate, 'financial', req.file.originalname);
+      const docRecord: CandidateDocument = {
+        id: docId,
+        candidateId: candidate.id,
+        organizationId: candidate.organizationId,
+        category: 'financial',
+        fileName: req.file.originalname,
+        portalFileName,
+        diskFileName: req.file.filename,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        storagePath: `/api/documents/${docId}/download`,
+        extractionMethod: 'text',
+        verificationStatus: 'verified',
+        uploadedAt: now,
+        ocrApplied: false,
+      };
+      const fileBuffer = await fs.promises.readFile(req.file.path);
+      await store.saveDocument(docRecord, fileBuffer);
+      receiptDocument = docRecord;
+    }
+
+    const existingList = candidate.payments || [];
+    const existing = id ? existingList.find((p) => p.id === id) : undefined;
+    const payment = {
+      id: existing?.id || crypto.randomUUID(),
+      candidateId: candidate.id,
+      organizationId: candidate.organizationId,
+      title: String(title).trim(),
+      amount: String(amount).trim(),
+      paidDate: String(paidDate || now.slice(0, 10)),
+      paymentMethod: (paymentMethod || existing?.paymentMethod || 'Bank transfer') as any,
+      referenceNumber: referenceNumber ? String(referenceNumber).trim() : existing?.referenceNumber,
+      status: (status || existing?.status || 'paid') as any,
+      receiptDocumentId: receiptDocument?.id || existing?.receiptDocumentId,
+      receiptFileName: receiptDocument?.fileName || existing?.receiptFileName,
+      notes: notes ? String(notes).trim() : existing?.notes,
+      recordedBy: existing?.recordedBy || actorProfile?.fullName || req.user?.email || 'Consultant',
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+
+    const nextPayments = existing
+      ? existingList.map((p) => (p.id === existing.id ? payment : p))
+      : [payment, ...existingList];
+
+    candidate.payments = nextPayments;
+    candidate.updatedAt = now;
+    const updatedCandidate = await store.saveCandidate(candidate);
+
+    res.status(existing ? 200 : 201).json({
+      payment,
+      updatedCandidate,
+      receiptDocument,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/candidates/:id/payments/:paymentId', async (req: AuthRequest, res) => {
+  try {
+    const candidateId = req.params.id as string;
+    const paymentId = req.params.paymentId as string;
+    const candidate = await store.getCandidate(candidateId);
+    if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+
+    const visible = await filterCandidatesForUser(req, [candidate]);
+    if (visible.length === 0) {
+      return res.status(403).json({ error: 'Access denied for this candidate' });
+    }
+
+    candidate.payments = (candidate.payments || []).filter((p) => p.id !== paymentId);
+    candidate.updatedAt = new Date().toISOString();
+    const updatedCandidate = await store.saveCandidate(candidate);
+    res.json({ success: true, updatedCandidate });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Reconcile/Verify field edits from document review interface
 app.post('/api/candidates/:id/reconcile', async (req, res) => {
   try {

@@ -332,6 +332,37 @@ export const App: React.FC = () => {
     setCandidateCreds((prev) => prev.filter((cr) => cr.id !== credId));
   };
 
+  const handleRecordPayment = async (payload: {
+    id?: string;
+    title: string;
+    amount: string;
+    paidDate?: string;
+    paymentMethod?: string;
+    referenceNumber?: string;
+    status?: string;
+    notes?: string;
+    receiptFile?: File | null;
+  }) => {
+    if (!selectedCandidate) return;
+    const res = await api.recordCandidatePayment(selectedCandidate.id, payload);
+    setSelectedCandidate(res.updatedCandidate);
+    setCandidates((prev) =>
+      prev.map((c) => (c.id === res.updatedCandidate.id ? res.updatedCandidate : c))
+    );
+    if (res.receiptDocument) {
+      setCandidateDocs((prev) => [res.receiptDocument!, ...prev]);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!selectedCandidate) return;
+    const res = await api.deleteCandidatePayment(selectedCandidate.id, paymentId);
+    setSelectedCandidate(res.updatedCandidate);
+    setCandidates((prev) =>
+      prev.map((c) => (c.id === res.updatedCandidate.id ? res.updatedCandidate : c))
+    );
+  };
+
   const handleReconcileField = async (
     fieldKey: string,
     approvedValue: any,
@@ -774,6 +805,8 @@ export const App: React.FC = () => {
                         onDeleteDocument={handleDeleteDocument}
                         onSaveCredential={handleSaveCredential}
                         onDeleteCredential={handleDeleteCredential}
+                        onRecordPayment={handleRecordPayment}
+                        onDeletePayment={handleDeletePayment}
                         onEditCandidate={() => {
                           setEditingCandidate(selectedCandidate);
                           setIsCandidateModalOpen(true);

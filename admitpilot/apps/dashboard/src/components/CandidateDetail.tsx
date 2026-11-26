@@ -25,12 +25,14 @@ import {
   X,
   ArrowLeft,
   ClipboardList,
+  Receipt,
 } from 'lucide-react';
 import {
   ApplicationRecord,
   CandidateProfile,
   CandidateDocument,
   CandidatePortalCredential,
+  CandidatePaymentStatus,
   PortalCredentialType,
   DocumentCategory,
   CountryTeam,
@@ -62,6 +64,18 @@ interface CandidateDetailProps {
     credId?: string
   ) => Promise<void>;
   onDeleteCredential: (credId: string) => Promise<void>;
+  onRecordPayment?: (payload: {
+    id?: string;
+    title: string;
+    amount: string;
+    paidDate?: string;
+    paymentMethod?: string;
+    referenceNumber?: string;
+    status?: string;
+    notes?: string;
+    receiptFile?: File | null;
+  }) => Promise<void>;
+  onDeletePayment?: (paymentId: string) => Promise<void>;
   onEditCandidate: () => void;
   onUpdateRouting?: (updates: Partial<CandidateProfile>) => Promise<void>;
   onDeleteCandidate: (id: string) => void;
@@ -96,6 +110,8 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
   onDeleteDocument,
   onSaveCredential,
   onDeleteCredential,
+  onRecordPayment,
+  onDeletePayment,
   onEditCandidate,
   onUpdateRouting,
   onDeleteCandidate,
@@ -106,6 +122,7 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
   const [activeTab, setActiveTab] = useState<
     | 'overview'
     | 'applications'
+    | 'payments'
     | 'credentials'
     | 'documents'
     | 'personal'
@@ -117,6 +134,18 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
     | 'evidence'
     | 'notes'
   >('overview');
+
+  // Student Payment modal state
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [payTitle, setPayTitle] = useState('Consultancy Retainer Fee');
+  const [payAmount, setPayAmount] = useState('');
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [payMethod, setPayMethod] = useState('Bank transfer');
+  const [payRef, setPayRef] = useState('');
+  const [payStatus, setPayStatus] = useState<CandidatePaymentStatus>('paid');
+  const [payNotes, setPayNotes] = useState('');
+  const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
+  const [savingPayment, setSavingPayment] = useState(false);
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -495,6 +524,7 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
         {[
           { id: 'overview', label: 'Summary', icon: User },
           { id: 'applications', label: 'Applications', count: applications.length, icon: ClipboardList },
+          { id: 'payments', label: 'Payments & receipts', count: (candidate.payments || []).length, icon: Receipt },
           { id: 'credentials', label: 'Credentials & emails', count: credentials.length, icon: KeyRound },
           { id: 'documents', label: 'Documents', count: documents.length, icon: FileText },
           { id: 'passport', label: 'Passport & MRZ', icon: Shield },
@@ -1462,7 +1492,270 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
             )}
           </div>
         )}
+
+        {activeTab === 'payments' && (() => {
+          const paymentsList = candidate.payments || [];
+          return (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium text-ink-primary">
+                    Student payments & fee receipts
+                  </h3>
+                  <p className="text-xs text-ink-muted mt-0.5">
+                    Record consultancy fees, processing charges, and deposit receipts paid by{' '}
+                    {candidate.personal.legalGivenName} to your agency
+                  </p>
+                </div>
+                {onRecordPayment && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPayTitle('Consultancy Retainer Fee');
+                      setPayAmount('');
+                      setPayDate(new Date().toISOString().slice(0, 10));
+                      setPayMethod('Bank transfer');
+                      setPayRef('');
+                      setPayStatus('paid');
+                      setPayNotes('');
+                      setPayReceiptFile(null);
+                      setIsPaymentModalOpen(true);
+                    }}
+                    className="btn-primary shrink-0"
+                  >
+                    <Plus className="w-4 h-4 text-[#141415]" strokeWidth={1.5} />
+                    <span>Record payment</span>
+                  </button>
+                )}
+              </div>
+
+              {paymentsList.length === 0 ? (
+                <div className="p-8 rounded-xl bg-surface-deep border border-hairline text-center text-sm text-ink-muted">
+                  No payments recorded from this student yet
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {paymentsList.map((pay) => (
+                    <div
+                      key={pay.id}
+                      className="p-4 rounded-xl bg-surface-deep border border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className="text-sm font-medium text-ink-primary">{pay.title}</span>
+                          <span className="font-mono text-sm font-medium text-brass">
+                            {pay.amount}
+                          </span>
+                          <VerificationStamp
+                            tone={
+                              pay.status === 'paid'
+                                ? 'positive'
+                                : pay.status === 'refunded'
+                                  ? 'negative'
+                                  : 'brass'
+                            }
+                            label={pay.status}
+                          />
+                        </div>
+                        <p className="text-xs text-ink-muted font-mono">
+                          Paid {pay.paidDate} · {pay.paymentMethod || 'Bank transfer'}
+                          {pay.referenceNumber ? ` · Ref: ${pay.referenceNumber}` : ''}
+                          {pay.recordedBy ? ` · Recorded by ${pay.recordedBy}` : ''}
+                        </p>
+                        {pay.notes && <p className="text-xs text-ink-secondary">{pay.notes}</p>}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {pay.receiptDocumentId && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              api.downloadDocumentBlob(
+                                pay.receiptDocumentId!,
+                                'original',
+                                pay.receiptFileName || 'Payment_Receipt.pdf'
+                              )
+                            }
+                            className="btn-secondary h-8 px-2.5 text-xs"
+                            title={`Download receipt: ${pay.receiptFileName || 'Receipt'}`}
+                          >
+                            <Download className="w-3.5 h-3.5 text-ink-muted" strokeWidth={1.5} />
+                            <span>Receipt</span>
+                          </button>
+                        )}
+                        {onDeletePayment && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Delete payment "${pay.title}" (${pay.amount})?`)) {
+                                onDeletePayment(pay.id);
+                              }
+                            }}
+                            className="h-8 w-8 rounded-lg text-ink-muted hover:text-tone-negative hover:bg-surface-raised inline-flex items-center justify-center"
+                            title="Delete payment record"
+                          >
+                            <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
+
+      {/* Record Student Payment Modal */}
+      {isPaymentModalOpen && onRecordPayment && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+          <div className="bg-surface-card border border-hairline-strong rounded-2xl w-full max-w-lg overflow-hidden">
+            <div className="h-14 px-6 border-b border-hairline flex items-center justify-between">
+              <h3 className="text-base font-medium text-ink-primary">Record student payment</h3>
+              <button
+                type="button"
+                onClick={() => setIsPaymentModalOpen(false)}
+                className="h-8 w-8 rounded-lg text-ink-muted hover:text-ink-primary hover:bg-surface-raised inline-flex items-center justify-center"
+              >
+                <X className="w-4 h-4" strokeWidth={1.5} />
+              </button>
+            </div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setSavingPayment(true);
+                try {
+                  await onRecordPayment({
+                    title: payTitle.trim(),
+                    amount: payAmount.trim(),
+                    paidDate: payDate,
+                    paymentMethod: payMethod,
+                    referenceNumber: payRef.trim() || undefined,
+                    status: payStatus,
+                    notes: payNotes.trim() || undefined,
+                    receiptFile: payReceiptFile,
+                  });
+                  setIsPaymentModalOpen(false);
+                } finally {
+                  setSavingPayment(false);
+                }
+              }}
+              className="p-6 space-y-4 text-sm max-h-[82vh] overflow-y-auto"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1.5">Payment description *</label>
+                  <input
+                    required
+                    value={payTitle}
+                    onChange={(e) => setPayTitle(e.target.value)}
+                    placeholder="Consultancy Retainer Fee"
+                    className="field-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1.5">Amount paid *</label>
+                  <input
+                    required
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    placeholder="PKR 75,000 / GBP 500"
+                    className="field-input font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1.5">Payment date</label>
+                  <input
+                    type="date"
+                    value={payDate}
+                    onChange={(e) => setPayDate(e.target.value)}
+                    className="field-input font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1.5">Method</label>
+                  <select
+                    value={payMethod}
+                    onChange={(e) => setPayMethod(e.target.value)}
+                    className="field-input text-xs"
+                  >
+                    <option value="Bank transfer">Bank transfer</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
+                    <option value="Online / Wise">Online / Wise</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-secondary mb-1.5">Status</label>
+                  <select
+                    value={payStatus}
+                    onChange={(e) => setPayStatus(e.target.value as CandidatePaymentStatus)}
+                    className="field-input text-xs"
+                  >
+                    <option value="paid">Paid</option>
+                    <option value="partial">Partial</option>
+                    <option value="pending">Pending</option>
+                    <option value="refunded">Refunded</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-ink-secondary mb-1.5">
+                  Transaction / receipt reference #
+                </label>
+                <input
+                  value={payRef}
+                  onChange={(e) => setPayRef(e.target.value)}
+                  placeholder="TXN-984712"
+                  className="field-input font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-ink-secondary mb-1.5">
+                  Attach payment receipt (PDF or image)
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp"
+                  onChange={(e) => setPayReceiptFile(e.target.files?.[0] || null)}
+                  className="block w-full text-xs text-ink-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-hairline file:bg-surface-deep file:text-xs file:text-ink-primary hover:file:border-hairline-strong"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-ink-secondary mb-1.5">Notes</label>
+                <textarea
+                  value={payNotes}
+                  onChange={(e) => setPayNotes(e.target.value)}
+                  rows={2}
+                  className="field-input h-auto py-2"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-hairline">
+                <button
+                  type="button"
+                  onClick={() => setIsPaymentModalOpen(false)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={savingPayment} className="btn-primary">
+                  {savingPayment ? 'Saving payment...' : 'Save payment & receipt'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Multi-file Document Upload Modal */}
       <DocumentUploadModal

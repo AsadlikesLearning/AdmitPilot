@@ -369,6 +369,58 @@ export const api = {
     return { objectUrl, mimeType };
   },
 
+  deleteCandidatePayment: async (
+    candidateId: string,
+    paymentId: string
+  ): Promise<{ success: boolean; updatedCandidate: CandidateProfile }> => {
+    const res = await authFetch(`${API_BASE}/candidates/${candidateId}/payments/${paymentId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete payment');
+    return res.json();
+  },
+
+  recordCandidatePayment: async (
+    candidateId: string,
+    payload: {
+      id?: string;
+      title: string;
+      amount: string;
+      paidDate?: string;
+      paymentMethod?: string;
+      referenceNumber?: string;
+      status?: string;
+      notes?: string;
+      receiptFile?: File | null;
+    }
+  ): Promise<{
+    payment: any;
+    updatedCandidate: CandidateProfile;
+    receiptDocument?: CandidateDocument | null;
+  }> => {
+    const formData = new FormData();
+    if (payload.id) formData.append('id', payload.id);
+    formData.append('title', payload.title);
+    formData.append('amount', payload.amount);
+    if (payload.paidDate) formData.append('paidDate', payload.paidDate);
+    if (payload.paymentMethod) formData.append('paymentMethod', payload.paymentMethod);
+    if (payload.referenceNumber) formData.append('referenceNumber', payload.referenceNumber);
+    if (payload.status) formData.append('status', payload.status);
+    if (payload.notes) formData.append('notes', payload.notes);
+    if (payload.receiptFile) formData.append('receipt', payload.receiptFile);
+
+    const res = await authFetch(
+      `${API_BASE}/candidates/${candidateId}/payments`,
+      { method: 'POST', body: formData },
+      false
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to record payment');
+    }
+    return res.json();
+  },
+
   reconcileField: async (
     candidateId: string,
     fieldKey: string,

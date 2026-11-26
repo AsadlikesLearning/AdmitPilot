@@ -226,6 +226,26 @@ export interface CandidateAdditional {
   notes?: string;
 }
 
+export type CandidatePaymentStatus = 'paid' | 'partial' | 'pending' | 'refunded';
+
+export interface CandidatePayment {
+  id: string;
+  candidateId: string;
+  organizationId: string;
+  title: string;
+  amount: string;
+  paidDate: string;
+  paymentMethod?: 'Bank transfer' | 'Cash' | 'Card' | 'Online / Wise' | 'Cheque' | 'Other';
+  referenceNumber?: string;
+  status: CandidatePaymentStatus;
+  receiptDocumentId?: string;
+  receiptFileName?: string;
+  notes?: string;
+  recordedBy?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface CandidateProfile {
   id: string;
   organizationId: string;
@@ -243,6 +263,7 @@ export interface CandidateProfile {
   englishTests: EnglishTestRecord[];
   employment: EmploymentRecord[];
   additional: CandidateAdditional;
+  payments?: CandidatePayment[];
 
   // Metadata for auditing & verification
   evidence: Record<string, FieldEvidence>;
