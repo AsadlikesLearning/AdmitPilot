@@ -63,6 +63,13 @@ export const App: React.FC = () => {
       return 'dark';
     }
   });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('admitpilot-sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [editingCandidate, setEditingCandidate] = useState<CandidateProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -638,13 +645,29 @@ export const App: React.FC = () => {
         applicationCount={scopedApplications.length}
         teamCount={teamMembers.length}
         countryTeamsCount={countryTeams.length}
+        conflictCount={workspaceAlerts.filter((a) => a.kind === 'conflict').length}
         organizationName={organization?.name}
         userRole={currentUser?.role}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() =>
+          setSidebarCollapsed((prev) => {
+            const next = !prev;
+            try {
+              localStorage.setItem('admitpilot-sidebar-collapsed', String(next));
+            } catch {
+              // ignore storage errors
+            }
+            return next;
+          })
+        }
+        storageStatus={storageStatus}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header
+          currentTab={currentTab}
+          candidateViewMode={candidateViewMode}
           searchTerm={searchTerm}
           onSearchChange={(val) => {
             setSearchTerm(val);
@@ -675,12 +698,16 @@ export const App: React.FC = () => {
               }
             }
           }}
-          storageStatus={storageStatus}
+          viewScope={viewScope}
+          onChangeViewScope={setViewScope}
+          assignedCount={assignedCandidates.length}
+          totalCount={candidates.length}
           onOpenActiveCandidate={() => {
             setCandidateViewMode('detail');
             setCurrentTab('candidates');
           }}
           onOpenAdminProfile={() => setCurrentTab('admin-profile')}
+          onOpenAgencySettings={() => setCurrentTab('agency-settings')}
           onSwitchAccount={() => setIsLoginModalOpen(true)}
         />
 
@@ -703,57 +730,6 @@ export const App: React.FC = () => {
               </div>
             ) : (
               <>
-                {currentUser &&
-                  (currentTab === 'dashboard' ||
-                    currentTab === 'candidates' ||
-                    currentTab === 'applications') && (
-                    <div className="mb-5 p-2.5 rounded-xl bg-surface-card border border-hairline flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 text-xs text-ink-secondary">
-                        <span>
-                          Signed in as{' '}
-                          <span className="text-ink-primary font-medium">{currentUser.fullName}</span>
-                        </span>
-                        <span className="text-ink-muted">·</span>
-                        <span className="font-mono text-brass">
-                          {assignedCandidates.length} assigned students · {assignedApplications.length}{' '}
-                          applications
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {currentUser.role === 'org_admin' ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setViewScope('assigned')}
-                              className={`h-7 px-3 rounded-lg text-xs transition-colors ${
-                                viewScope === 'assigned'
-                                  ? 'bg-surface-raised border border-brass-border text-ink-primary font-medium'
-                                  : 'text-ink-secondary hover:text-ink-primary border border-transparent'
-                              }`}
-                            >
-                              My assigned ({assignedCandidates.length})
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setViewScope('all')}
-                              className={`h-7 px-3 rounded-lg text-xs transition-colors ${
-                                viewScope === 'all'
-                                  ? 'bg-surface-raised border border-brass-border text-ink-primary font-medium'
-                                  : 'text-ink-secondary hover:text-ink-primary border border-transparent'
-                              }`}
-                            >
-                              All agency ({candidates.length})
-                            </button>
-                          </>
-                        ) : (
-                          <span className="h-7 px-3 rounded-lg text-xs bg-surface-raised border border-brass-border text-ink-primary font-medium inline-flex items-center">
-                            Assigned to you ({assignedCandidates.length})
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                 {currentTab === 'dashboard' && (
                   <DashboardStats
                     candidates={scopedCandidates}
