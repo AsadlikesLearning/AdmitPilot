@@ -315,6 +315,35 @@ export const api = {
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   },
 
+  downloadPortalPacket: async (
+    candidateId: string,
+    fallbackFileName = 'Portal_Packet.zip'
+  ): Promise<void> => {
+    const res = await authFetch(
+      `${API_BASE}/candidates/${candidateId}/portal-packet.zip`,
+      {},
+      false
+    );
+    if (!res.ok) throw new Error('Portal packet export failed');
+
+    let filename = fallbackFileName;
+    const disp = res.headers.get('Content-Disposition');
+    if (disp) {
+      const asciiMatch = disp.match(/filename="([^"]+)"/i);
+      if (asciiMatch?.[1]) filename = asciiMatch[1];
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  },
+
   fetchDocumentPreviewUrl: async (
     docId: string
   ): Promise<{ objectUrl: string; mimeType: string }> => {

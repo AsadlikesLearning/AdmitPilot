@@ -1,6 +1,25 @@
-import React from 'react';
-import { Search, FolderOpen, Database, ArrowLeftRight, Sun, Moon } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Search,
+  FolderOpen,
+  Database,
+  ArrowLeftRight,
+  Sun,
+  Moon,
+  Bell,
+  AlertTriangle,
+  CalendarClock,
+} from 'lucide-react';
 import { UserProfile } from 'admitpilot-shared';
+
+export interface WorkspaceAlert {
+  id: string;
+  kind: 'deadline' | 'conflict';
+  title: string;
+  subtitle: string;
+  tone: 'negative' | 'brass';
+  candidateId?: string;
+}
 
 interface HeaderProps {
   searchTerm: string;
@@ -10,6 +29,8 @@ interface HeaderProps {
   isAdminActive?: boolean;
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
+  alerts?: WorkspaceAlert[];
+  onSelectAlert?: (alert: WorkspaceAlert) => void;
   storageStatus?: {
     engine?: 'supabase_postgres' | 'local_json';
     connected?: boolean;
@@ -47,11 +68,14 @@ export const Header: React.FC<HeaderProps> = ({
   isAdminActive,
   theme = 'dark',
   onToggleTheme,
+  alerts = [],
+  onSelectAlert,
   storageStatus,
   onOpenActiveCandidate,
   onOpenAdminProfile,
   onSwitchAccount,
 }) => {
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const displayName = currentUser?.fullName || 'Sarah Jenkins';
   const displayRole = ROLE_SHORT[currentUser?.role || 'org_admin'] || 'Org admin';
   const isSupabase =
@@ -105,7 +129,80 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        <div className="pl-2.5 border-l border-hairline flex items-center gap-1.5">
+        <div className="pl-2.5 border-l border-hairline flex items-center gap-1.5 relative">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setAlertsOpen((o) => !o)}
+              title="Notifications: deadlines & document conflicts"
+              aria-label="Workspace notifications"
+              className="relative h-8 w-8 rounded-lg bg-surface-card border border-hairline hover:border-hairline-strong text-ink-secondary hover:text-ink-primary inline-flex items-center justify-center transition-colors duration-150 ease-quart"
+            >
+              <Bell className="w-4 h-4" strokeWidth={1.5} />
+              {alerts.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brass text-[#141415] font-mono text-[10px] font-semibold flex items-center justify-center">
+                  {alerts.length > 9 ? '9+' : alerts.length}
+                </span>
+              )}
+            </button>
+
+            {alertsOpen && (
+              <div className="absolute right-0 mt-2 w-80 rounded-xl bg-surface-card border border-hairline-strong shadow-xl z-50 overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-hairline flex items-center justify-between">
+                  <span className="text-xs font-medium text-ink-primary">
+                    Workspace alerts ({alerts.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAlertsOpen(false)}
+                    className="text-[11px] text-ink-muted hover:text-ink-primary"
+                  >
+                    Close
+                  </button>
+                </div>
+                {alerts.length === 0 ? (
+                  <div className="p-4 text-xs text-ink-muted text-center">
+                    No upcoming 14-day deadlines or field conflicts
+                  </div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto divide-y divide-hairline">
+                    {alerts.map((alert) => (
+                      <button
+                        key={alert.id}
+                        type="button"
+                        onClick={() => {
+                          setAlertsOpen(false);
+                          onSelectAlert?.(alert);
+                        }}
+                        className="w-full px-4 py-2.5 text-left hover:bg-surface-deep/60 flex items-start gap-2.5 transition-colors"
+                      >
+                        {alert.kind === 'conflict' ? (
+                          <AlertTriangle
+                            className="w-4 h-4 text-tone-negative shrink-0 mt-0.5"
+                            strokeWidth={1.5}
+                          />
+                        ) : (
+                          <CalendarClock
+                            className={`w-4 h-4 shrink-0 mt-0.5 ${
+                              alert.tone === 'negative' ? 'text-tone-negative' : 'text-brass'
+                            }`}
+                            strokeWidth={1.5}
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-ink-primary truncate">
+                            {alert.title}
+                          </p>
+                          <p className="text-[11px] text-ink-secondary truncate">{alert.subtitle}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {onToggleTheme && (
             <button
               type="button"

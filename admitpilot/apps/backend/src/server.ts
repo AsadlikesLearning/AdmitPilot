@@ -22,6 +22,7 @@ import jwt from 'jsonwebtoken';
 import { authenticateJWT, AuthRequest, JWT_SECRET } from './middleware/auth.js';
 import { setStoreContext } from './middleware/store-context.js';
 import { DEFAULT_ADMIN_UUID, DEFAULT_ORG_UUID, toUuid } from './utils/crypto.js';
+import { buildZipBuffer, ZipEntry } from './utils/zip.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -685,6 +686,87 @@ app.get('/api/candidates/:id/documents', async (req, res) => {
     const candidateId = req.params.id as string;
     const docs = await store.listDocuments(candidateId);
     res.json(docs);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// One-Click Standardized Portal Packet (.zip) Export
+app.get('/api/candidates/:id/portal-packet.zip', async (req: AuthRequest, res) => {
+  try {
+    const candidateId = req.params.id as string;
+    const candidate = await store.getCandidate(candidateId);
+    if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+
+    const visible = await filterCandidatesForUser(req, [candidate]);
+    if (visible.length === 0) {
+      return res.status(403).json({ error: 'You do not have access to this candidate' });
+    }
+
+    const docs = await store.listDocuments(candidateId);
+    const entries: ZipEntry[] = [];
+    const usedNames = new Set<string>();
+
+    const summaryLines = [
+      `AdmitPilot — Standardized Portal Packet`,
+      `========================================`,
+      `Candidate: ${candidate.personal.legalGivenName} ${candidate.personal.familyName}`,
+      `Nationality: ${candidate.personal.nationality || 'N/A'}`,
+      `Date of Birth: ${candidate.personal.dateOfBirth || 'N/A'}`,
+      `Passport No: ${candidate.passport?.passportNumber || 'N/A'} (Expires: ${candidate.passport?.expiryDate || 'N/A'})`,
+      `Primary Email: ${candidate.contact.email || 'N/A'}`,
+      `Managed Student Email: ${candidate.contact.managedStudentEmail || 'N/A'}`,
+      `Phone: ${candidate.contact.phone || 'N/A'}`,
+      `Target Countries: ${(candidate.targetCountries || []).join(', ') || 'N/A'}`,
+      ``,
+      `Included Documents (${docs.length}):`,
+    ];
+
+    for (const doc of docs) {
+      const basePortalName =
+        doc.portalFileName || buildPortalFileName(candidate, doc.category, doc.fileName);
+      let entryName = basePortalName;
+      let counter = 2;
+      while (usedNames.has(entryName.toLowerCase())) {
+        const dotIdx = basePortalName.lastIndexOf('.');
+        entryName =
+          dotIdx > 0
+            ? `${basePortalName.slice(0, dotIdx)}_${counter}${basePortalName.slice(dotIdx)}`
+            : `${basePortalName}_${counter}`;
+        counter++;
+      }
+      usedNames.add(entryName.toLowerCase());
+
+      const diskPath = resolveDocDiskPath(doc);
+      let fileBuffer: Buffer | null = null;
+      if (diskPath) {
+        fileBuffer = await fs.promises.readFile(diskPath);
+      } else {
+        fileBuffer = await store.getDocumentBlob(doc.id);
+      }
+      if (!fileBuffer && doc.extractedText) {
+        fileBuffer = Buffer.from(doc.extractedText, 'utf-8');
+      }
+      if (fileBuffer) {
+        entries.push({ name: entryName, data: fileBuffer });
+        summaryLines.push(`- ${entryName} (from ${doc.fileName})`);
+      }
+    }
+
+    entries.unshift({
+      name: '00_Dossier_Summary.txt',
+      data: Buffer.from(summaryLines.join('\n'), 'utf8'),
+    });
+
+    const zipBuffer = buildZipBuffer(entries);
+    const safeLast = (candidate.personal.familyName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeFirst = (candidate.personal.legalGivenName || 'Dossier').replace(/[^a-zA-Z0-9_-]/g, '');
+    const zipName = `${safeLast}_${safeFirst}_Portal_Packet.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+    res.setHeader('Content-Length', String(zipBuffer.length));
+    res.send(zipBuffer);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

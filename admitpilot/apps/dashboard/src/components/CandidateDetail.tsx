@@ -234,9 +234,26 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
     }
   };
 
+  const [downloadingPacket, setDownloadingPacket] = useState(false);
+  const [isDragOverDocs, setIsDragOverDocs] = useState(false);
+
   const handleDownloadAllDocs = async () => {
-    for (const doc of documents) {
-      await api.downloadDocumentBlob(doc.id, 'portal', doc.portalFileName || doc.fileName);
+    setDownloadingPacket(true);
+    try {
+      const safeLast = (candidate.personal.familyName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '');
+      const safeFirst = (candidate.personal.legalGivenName || 'Dossier').replace(/[^a-zA-Z0-9_-]/g, '');
+      await api.downloadPortalPacket(candidate.id, `${safeLast}_${safeFirst}_Portal_Packet.zip`);
+    } finally {
+      setDownloadingPacket(false);
+    }
+  };
+
+  const handleDropDocs = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOverDocs(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length > 0) {
+      await onUploadDocuments(files, 'auto');
     }
   };
 
@@ -823,16 +840,26 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
           </div>
         )}
 
-        {/* Upgraded Documents Vault with Portal Download, Preview, Re-Extract & Delete */}
+        {/* Upgraded Documents Vault with Portal Packet ZIP Download, Drag-Drop, Preview, Re-Extract & Delete */}
         {activeTab === 'documents' && (
-          <div className="space-y-4">
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragOverDocs(true);
+            }}
+            onDragLeave={() => setIsDragOverDocs(false)}
+            onDrop={handleDropDocs}
+            className={`space-y-4 rounded-xl transition-colors ${
+              isDragOverDocs ? 'ring-2 ring-brass bg-brass-soft/30 p-2 -m-2' : ''
+            }`}
+          >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-medium text-ink-primary">
                   Candidate document vault & portal upload packet
                 </h3>
                 <p className="text-xs text-ink-muted mt-0.5">
-                  Standardized filenames ready for direct university portal upload via dashboard or Chrome extension
+                  Drag & drop PDFs or images anywhere here, or export a single standardized .zip packet
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -840,10 +867,15 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
                   <button
                     type="button"
                     onClick={handleDownloadAllDocs}
+                    disabled={downloadingPacket}
                     className="btn-secondary"
                   >
                     <Download className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
-                    <span>Download packet ({documents.length})</span>
+                    <span>
+                      {downloadingPacket
+                        ? 'Building ZIP...'
+                        : `Portal packet (.zip · ${documents.length})`}
+                    </span>
                   </button>
                 )}
                 <button type="button" onClick={() => setIsUploadModalOpen(true)} className="btn-primary">

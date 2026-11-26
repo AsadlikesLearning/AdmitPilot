@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar, NavTab } from './components/Sidebar';
-import { Header } from './components/Header';
+import { Header, WorkspaceAlert } from './components/Header';
 import { DashboardStats } from './components/DashboardStats';
 import { CandidateList } from './components/CandidateList';
 import { CandidateDetail } from './components/CandidateDetail';
@@ -467,6 +467,53 @@ export const App: React.FC = () => {
   const scopedCandidates = viewScope === 'assigned' ? assignedCandidates : candidates;
   const scopedApplications = viewScope === 'assigned' ? assignedApplications : applications;
 
+  const workspaceAlerts: WorkspaceAlert[] = (() => {
+    const list: WorkspaceAlert[] = [];
+    const nowMs = Date.now();
+    const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+
+    if (currentUser?.notifications?.conflictAlerts !== false) {
+      for (const c of scopedCandidates) {
+        const conflictCount = Object.keys(c.conflicts || {}).length;
+        if (conflictCount > 0) {
+          list.push({
+            id: `conflict-${c.id}`,
+            kind: 'conflict',
+            title: `${c.personal.legalGivenName} ${c.personal.familyName}`,
+            subtitle: `${conflictCount} field discrepanc${conflictCount === 1 ? 'y' : 'ies'} need review`,
+            tone: 'negative',
+            candidateId: c.id,
+          });
+        }
+      }
+    }
+
+    if (currentUser?.notifications?.portalDeadlines !== false) {
+      for (const app of scopedApplications) {
+        if (!app.deadline || ['enrolled', 'rejected', 'withdrawn'].includes(app.status)) continue;
+        const dueMs = Date.parse(app.deadline);
+        if (!Number.isNaN(dueMs) && dueMs - nowMs <= fourteenDaysMs) {
+          const daysLeft = Math.ceil((dueMs - nowMs) / (24 * 60 * 60 * 1000));
+          list.push({
+            id: `deadline-${app.id}`,
+            kind: 'deadline',
+            title: `${app.institutionName} (${app.programName})`,
+            subtitle:
+              daysLeft < 0
+                ? `Overdue by ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} (${app.deadline})`
+                : daysLeft === 0
+                  ? `Due today (${app.deadline})`
+                  : `Due in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${app.deadline})`,
+            tone: daysLeft <= 3 ? 'negative' : 'brass',
+            candidateId: app.candidateId,
+          });
+        }
+      }
+    }
+
+    return list;
+  })();
+
   const filteredCandidates = scopedCandidates.filter((c) => {
     const q = searchTerm.toLowerCase();
     if (!q) return true;
@@ -505,7 +552,7 @@ export const App: React.FC = () => {
             }
           }}
           activeCandidateName={
-            selectedCandidate
+            selectedCandidate && scopedCandidates.some((c) => c.id === selectedCandidate.id)
               ? `${selectedCandidate.personal.legalGivenName} ${selectedCandidate.personal.familyName}`
               : undefined
           }
@@ -513,6 +560,20 @@ export const App: React.FC = () => {
           isAdminActive={currentTab === 'admin-profile'}
           theme={theme}
           onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+          alerts={workspaceAlerts}
+          onSelectAlert={(alert) => {
+            if (alert.kind === 'deadline') {
+              setCurrentTab('applications');
+              return;
+            }
+            if (alert.candidateId) {
+              const target = scopedCandidates.find((c) => c.id === alert.candidateId);
+              if (target) {
+                handleSelectCandidate(target);
+                setCurrentTab('candidates');
+              }
+            }
+          }}
           storageStatus={storageStatus}
           onOpenActiveCandidate={() => setCurrentTab('candidates')}
           onOpenAdminProfile={() => setCurrentTab('admin-profile')}

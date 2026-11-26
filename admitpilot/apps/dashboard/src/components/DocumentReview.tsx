@@ -55,6 +55,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<DocumentCategory>('passport');
   const [reextracting, setReextracting] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [showApproveDiff, setShowApproveDiff] = useState(false);
 
   useEffect(() => {
     if (!document) {
@@ -219,11 +220,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
           {entries.length > 0 && (
             <button
               type="button"
-              onClick={() => {
-                for (const [k, v] of entries) {
-                  onReconcile(k, (v as any).value ?? v, 'Batch consultant approved', document.id);
-                }
-              }}
+              onClick={() => setShowApproveDiff(true)}
               className="btn-primary"
             >
               Approve all ({entries.length})
@@ -355,7 +352,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                   <iframe
                     src={previewUrl}
                     title={document.fileName}
-                    className="w-full h-full border-0 bg-white"
+                    className={`w-full h-full border-0 bg-white ${showApproveDiff ? 'invisible' : ''}`}
                   />
                 ) : previewUrl && previewMime.startsWith('image/') ? (
                   <img
@@ -479,6 +476,87 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Approve All Diff Preview Modal */}
+      {showApproveDiff && (
+        <div className="fixed inset-0 z-[100] bg-black/75 flex items-center justify-center p-4">
+          <div className="bg-surface-card border border-hairline-strong rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="h-14 px-6 border-b border-hairline flex items-center justify-between shrink-0">
+              <h3 className="text-base font-medium text-ink-primary">
+                Confirm dossier updates ({entries.length} fields)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowApproveDiff(false)}
+                className="h-8 w-8 rounded-lg text-ink-muted hover:text-ink-primary hover:bg-surface-raised inline-flex items-center justify-center"
+              >
+                <X className="w-4 h-4" strokeWidth={1.5} />
+              </button>
+            </div>
+            <div className="p-6 space-y-3 flex-1 overflow-y-auto text-xs">
+              <p className="text-ink-secondary">
+                Review the extracted values from <span className="font-medium text-ink-primary">{document.fileName}</span> before applying them to{' '}
+                <span className="font-medium text-ink-primary">
+                  {candidate.personal.legalGivenName} {candidate.personal.familyName}
+                </span>
+                .
+              </p>
+              <div className="space-y-2">
+                {entries.map(([key, valObj]: [string, any]) => {
+                  const nextVal = String(valObj?.value ?? valObj ?? '');
+                  const targetPath = valObj?.targetPath || key;
+                  const humanKey =
+                    valObj?.label ||
+                    key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+                  const conflictMatch = conflicts.find(
+                    (c) => c.fieldKey === key || c.fieldKey === targetPath
+                  );
+                  return (
+                    <div
+                      key={key}
+                      className="p-3 rounded-lg bg-surface-deep border border-hairline flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-ink-primary truncate">{humanKey}</p>
+                        <p className="font-mono text-[11px] text-ink-muted truncate">{targetPath}</p>
+                      </div>
+                      <div className="text-right font-mono shrink-0 max-w-[55%]">
+                        {conflictMatch && (
+                          <span className="block text-[11px] text-ink-muted line-through truncate">
+                            {conflictMatch.candidateValue}
+                          </span>
+                        )}
+                        <span className="block text-xs text-tone-positive truncate">{nextVal}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-hairline flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowApproveDiff(false)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  for (const [k, v] of entries) {
+                    onReconcile(k, (v as any).value ?? v, 'Batch consultant approved', document.id);
+                  }
+                  setShowApproveDiff(false);
+                }}
+                className="btn-primary"
+              >
+                Apply all ({entries.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
