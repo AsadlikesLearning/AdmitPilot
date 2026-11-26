@@ -11,6 +11,8 @@ import {
   Code2,
   Upload,
   CheckCircle2,
+  ChevronDown,
+  Search,
 } from 'lucide-react';
 import { CandidateDocument, CandidateProfile, DocumentCategory } from 'admitpilot-shared';
 import { VerificationStamp, formatExtractionMethod, formatCategoryLabel } from './ui/Primitives';
@@ -68,6 +70,8 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
   const [downloading, setDownloading] = useState(false);
   const [showApproveDiff, setShowApproveDiff] = useState(false);
   const [fieldFilter, setFieldFilter] = useState<'all' | 'pending' | 'confirmed'>('all');
+  const [candidateMenuOpen, setCandidateMenuOpen] = useState(false);
+  const [candidateSearch, setCandidateSearch] = useState('');
   const [statusBanner, setStatusBanner] = useState<{
     tone: 'positive' | 'negative';
     text: string;
@@ -155,6 +159,114 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
     }
   };
 
+  const initialsOf = (c: CandidateProfile) =>
+    `${c.personal.legalGivenName?.[0] || ''}${c.personal.familyName?.[0] || ''}`.toUpperCase() || 'ST';
+
+  const renderCandidateSwitcher = () => {
+    if (candidates.length === 0 || !onSelectCandidate) return null;
+    const filteredCands = candidates.filter((c) => {
+      if (!candidateSearch.trim()) return true;
+      const q = candidateSearch.toLowerCase();
+      return `${c.personal.legalGivenName} ${c.personal.familyName} ${c.personal.nationality} ${
+        c.passport?.passportNumber || ''
+      }`
+        .toLowerCase()
+        .includes(q);
+    });
+
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setCandidateMenuOpen((o) => !o);
+            setCandidateSearch('');
+          }}
+          aria-label="Switch student in Document Review"
+          className="h-9 px-3 rounded-lg bg-surface-card border border-hairline hover:border-hairline-strong inline-flex items-center gap-2.5 text-xs transition-colors"
+        >
+          <span className="w-5 h-5 rounded bg-surface-deep border border-hairline font-mono text-[10px] text-brass flex items-center justify-center shrink-0">
+            {candidate ? initialsOf(candidate) : 'ST'}
+          </span>
+          <span className="font-medium text-ink-primary truncate max-w-[160px]">
+            {candidate
+              ? `${candidate.personal.legalGivenName} ${candidate.personal.familyName}`
+              : 'Select student'}
+          </span>
+          <ChevronDown className="w-3.5 h-3.5 text-ink-muted shrink-0" strokeWidth={1.5} />
+        </button>
+
+        {candidateMenuOpen && (
+          <div className="absolute right-0 mt-2 w-72 rounded-xl bg-surface-card border border-hairline-strong shadow-xl z-50 overflow-hidden">
+            <div className="p-2.5 border-b border-hairline">
+              <div className="relative">
+                <Search
+                  className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none"
+                  strokeWidth={1.5}
+                />
+                <input
+                  type="text"
+                  autoFocus
+                  value={candidateSearch}
+                  onChange={(e) => setCandidateSearch(e.target.value)}
+                  placeholder="Search student, nationality, passport..."
+                  className="field-input h-8 pl-8 text-xs"
+                />
+              </div>
+            </div>
+            <div className="max-h-60 overflow-y-auto divide-y divide-hairline">
+              {filteredCands.length === 0 ? (
+                <div className="p-3 text-xs text-ink-muted text-center">No matching students</div>
+              ) : (
+                filteredCands.map((c) => {
+                  const active = candidate?.id === c.id;
+                  const conflictsLen = Object.keys(c.conflicts || {}).length;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setCandidateMenuOpen(false);
+                        setCandidateSearch('');
+                        onSelectCandidate(c);
+                      }}
+                      className={`w-full px-3 py-2.5 text-left flex items-center justify-between gap-2.5 transition-colors ${
+                        active ? 'bg-surface-raised' : 'hover:bg-surface-deep/60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-7 h-7 rounded-md bg-surface-deep border border-hairline font-mono text-[11px] text-brass flex items-center justify-center shrink-0">
+                          {initialsOf(c)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-ink-primary truncate">
+                            {c.personal.legalGivenName} {c.personal.familyName}
+                          </p>
+                          <p className="text-[11px] text-ink-muted truncate">
+                            {c.personal.nationality}
+                            {c.passport?.passportNumber ? ` · ${c.passport.passportNumber}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {conflictsLen > 0 && (
+                          <span className="px-1.5 py-0.5 rounded bg-tone-negative/15 text-tone-negative font-mono text-[10px]">
+                            {conflictsLen}
+                          </span>
+                        )}
+                        {active && <Check className="w-3.5 h-3.5 text-brass" strokeWidth={1.5} />}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (!document || !candidate) {
     return (
       <div className="space-y-5">
@@ -169,22 +281,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {candidates.length > 0 && onSelectCandidate && (
-              <select
-                value={candidate?.id || ''}
-                onChange={(e) => {
-                  const found = candidates.find((c) => c.id === e.target.value);
-                  if (found) onSelectCandidate(found);
-                }}
-                className="field-input h-9 w-auto text-xs"
-              >
-                {candidates.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.personal.legalGivenName} {c.personal.familyName}
-                  </option>
-                ))}
-              </select>
-            )}
+            {renderCandidateSwitcher()}
             {onUploadDocuments && (
               <>
                 <input
@@ -294,23 +391,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {candidates.length > 1 && onSelectCandidate && (
-            <select
-              value={candidate.id}
-              onChange={(e) => {
-                const found = candidates.find((c) => c.id === e.target.value);
-                if (found) onSelectCandidate(found);
-              }}
-              aria-label="Switch student in Document Review"
-              className="field-input h-9 w-auto max-w-[210px] text-xs"
-            >
-              {candidates.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.personal.legalGivenName} {c.personal.familyName}
-                </option>
-              ))}
-            </select>
-          )}
+          {renderCandidateSwitcher()}
 
           {onUploadDocuments && (
             <>
