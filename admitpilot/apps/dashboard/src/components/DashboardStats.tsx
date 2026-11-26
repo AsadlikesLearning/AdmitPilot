@@ -6,8 +6,6 @@ import {
   AlertCircle,
   CheckCircle2,
   FileWarning,
-  Globe,
-  Calendar,
   X,
 } from 'lucide-react';
 import { CandidateProfile, ApplicationRecord } from 'admitpilot-shared';
@@ -50,6 +48,8 @@ export const DashboardStats: React.FC<StatsProps> = ({
 }) => {
   const [selectedIntake, setSelectedIntake] = useState<string>('all');
   const [selectedCountry, setSelectedCountry] = useState<string>('all');
+  const [pipelineTab, setPipelineTab] = useState<'stages' | 'intake' | 'country'>('stages');
+  const [railTab, setRailTab] = useState<'actions' | 'queue'>('actions');
 
   const candidateById = useMemo(
     () => new Map(candidates.map((c) => [c.id, c])),
@@ -112,7 +112,7 @@ export const DashboardStats: React.FC<StatsProps> = ({
     });
   }, [applications, candidateById, selectedIntake, selectedCountry]);
 
-  // Intake-wise & Country-wise breakdown (always computed over full scope so user can click to filter)
+  // Intake-wise & Country-wise breakdowns
   const intakeBreakdown = useMemo(() => {
     const map = new Map<
       string,
@@ -232,7 +232,7 @@ export const DashboardStats: React.FC<StatsProps> = ({
     candidates.map((c) => [c.id, `${c.personal.legalGivenName} ${c.personal.familyName}`])
   );
 
-  // Build workspace-wide Action Items & Upcoming Deadlines (respecting filters)
+  // Workspace-wide Action Items & Upcoming Deadlines
   type ActionItem = {
     id: string;
     kind: 'missing' | 'deposit' | 'deadline';
@@ -394,8 +394,8 @@ export const DashboardStats: React.FC<StatsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Page Title, Intake/Country Filters & Actions */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+      {/* Clean Header Row: Title + Scope + Primary Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-[28px] leading-[1.15] font-medium text-ink-primary tracking-[-0.015em]">
@@ -406,11 +406,25 @@ export const DashboardStats: React.FC<StatsProps> = ({
             </span>
           </div>
           <p className="text-sm text-ink-secondary mt-1.5">
-            Track dossier readiness, intake targets, and destination country pipelines
+            Workspace-wide dossier readiness, intake cycles, and destination pipelines
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button type="button" onClick={onNewCandidate} className="btn-secondary">
+            <Plus className="w-4 h-4 text-ink-secondary" strokeWidth={1.5} />
+            <span>New candidate</span>
+          </button>
+          <button type="button" onClick={() => onSelectTab('testing')} className="btn-primary">
+            <span>Open portal sandbox</span>
+            <ArrowUpRight className="w-4 h-4" strokeWidth={1.5} />
+          </button>
+        </div>
+      </div>
+
+      {/* Compact Filter Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <select
             value={selectedIntake}
             onChange={(e) => setSelectedIntake(e.target.value)}
@@ -452,16 +466,14 @@ export const DashboardStats: React.FC<StatsProps> = ({
               <span>Reset</span>
             </button>
           )}
-
-          <button type="button" onClick={onNewCandidate} className="btn-secondary">
-            <Plus className="w-4 h-4 text-ink-secondary" strokeWidth={1.5} />
-            <span>New candidate</span>
-          </button>
-          <button type="button" onClick={() => onSelectTab('testing')} className="btn-primary">
-            <span>Open portal sandbox</span>
-            <ArrowUpRight className="w-4 h-4" strokeWidth={1.5} />
-          </button>
         </div>
+
+        <span className="text-xs text-ink-muted tabular-nums">
+          {filteredCandidates.length}{' '}
+          {filteredCandidates.length === 1 ? 'candidate' : 'candidates'} ·{' '}
+          {filteredApplications.length}{' '}
+          {filteredApplications.length === 1 ? 'application' : 'applications'}
+        </span>
       </div>
 
       {/* 4 Interactive Stat Cards */}
@@ -502,223 +514,235 @@ export const DashboardStats: React.FC<StatsProps> = ({
         ))}
       </div>
 
-      {/* Intake-wise & Country-wise Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* By Intake */}
-        <div className="p-5 rounded-xl bg-surface-card border border-hairline space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-brass" strokeWidth={1.5} />
-              <h2 className="text-sm font-medium text-ink-primary">By intake</h2>
-            </div>
-            <span className="text-xs text-ink-muted tabular-nums">
-              {intakeBreakdown.length} {intakeBreakdown.length === 1 ? 'cycle' : 'cycles'}
-            </span>
-          </div>
-
-          {intakeBreakdown.length === 0 ? (
-            <p className="text-xs text-ink-muted py-2">No intake targets recorded yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {intakeBreakdown.map((row) => {
-                const isSelected = selectedIntake === row.intake;
-                const canFilter = row.intake !== 'Unspecified';
-                return (
-                  <button
-                    key={row.intake}
-                    type="button"
-                    disabled={!canFilter}
-                    onClick={() =>
-                      canFilter &&
-                      setSelectedIntake((prev) => (prev === row.intake ? 'all' : row.intake))
-                    }
-                    className={`w-full px-3 py-2 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors ${
-                      isSelected
-                        ? 'bg-brass-soft border-brass-border'
-                        : canFilter
-                        ? 'bg-surface-deep/60 border-hairline hover:border-hairline-strong'
-                        : 'bg-surface-deep/40 border-hairline opacity-75 cursor-default'
-                    }`}
-                  >
-                    <span
-                      className={`text-xs font-medium truncate ${
-                        isSelected ? 'text-brass' : 'text-ink-primary'
-                      }`}
-                    >
-                      {row.intake}
-                    </span>
-                    <div className="flex items-center gap-3 text-xs tabular-nums shrink-0">
-                      <span className="text-ink-secondary">
-                        <span className="font-medium text-ink-primary">{row.candidates}</span>{' '}
-                        {row.candidates === 1 ? 'student' : 'students'}
-                      </span>
-                      <span className="text-ink-muted">·</span>
-                      <span className="text-ink-secondary">
-                        <span className="font-medium text-ink-primary">{row.applications}</span>{' '}
-                        {row.applications === 1 ? 'app' : 'apps'}
-                      </span>
-                      {row.offers > 0 && (
-                        <>
-                          <span className="text-ink-muted">·</span>
-                          <span className="text-tone-positive font-medium">
-                            {row.offers} {row.offers === 1 ? 'offer' : 'offers'}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* By Destination Country */}
-        <div className="p-5 rounded-xl bg-surface-card border border-hairline space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Globe className="w-4 h-4 text-brass" strokeWidth={1.5} />
-              <h2 className="text-sm font-medium text-ink-primary">By destination country</h2>
-            </div>
-            <span className="text-xs text-ink-muted tabular-nums">
-              {countryBreakdown.length}{' '}
-              {countryBreakdown.length === 1 ? 'country' : 'countries'}
-            </span>
-          </div>
-
-          {countryBreakdown.length === 0 ? (
-            <p className="text-xs text-ink-muted py-2">No destination countries recorded yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {countryBreakdown.map((row) => {
-                const isSelected = selectedCountry === row.country;
-                const canFilter = row.country !== 'Unspecified';
-                return (
-                  <button
-                    key={row.country}
-                    type="button"
-                    disabled={!canFilter}
-                    onClick={() =>
-                      canFilter &&
-                      setSelectedCountry((prev) => (prev === row.country ? 'all' : row.country))
-                    }
-                    className={`w-full px-3 py-2 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors ${
-                      isSelected
-                        ? 'bg-brass-soft border-brass-border'
-                        : canFilter
-                        ? 'bg-surface-deep/60 border-hairline hover:border-hairline-strong'
-                        : 'bg-surface-deep/40 border-hairline opacity-75 cursor-default'
-                    }`}
-                  >
-                    <span
-                      className={`text-xs font-medium truncate ${
-                        isSelected ? 'text-brass' : 'text-ink-primary'
-                      }`}
-                    >
-                      {row.country}
-                    </span>
-                    <div className="flex items-center gap-3 text-xs tabular-nums shrink-0">
-                      <span className="text-ink-secondary">
-                        <span className="font-medium text-ink-primary">{row.candidates}</span>{' '}
-                        {row.candidates === 1 ? 'student' : 'students'}
-                      </span>
-                      <span className="text-ink-muted">·</span>
-                      <span className="text-ink-secondary">
-                        <span className="font-medium text-ink-primary">{row.applications}</span>{' '}
-                        {row.applications === 1 ? 'app' : 'apps'}
-                      </span>
-                      {row.offers > 0 && (
-                        <>
-                          <span className="text-ink-muted">·</span>
-                          <span className="text-tone-positive font-medium">
-                            {row.offers} {row.offers === 1 ? 'offer' : 'offers'}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Asymmetric Split: 8-col Main Readiness & Ledger + 4-col Workspace Action Items & Queue */}
+      {/* 2-Column Workspace Grid: Left (Pipeline + Candidates) | Right (Attention & Queue) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Main 2/3 Column: Intake Pipeline Chart + Candidate Readiness Table */}
-        <div className="lg:col-span-8 rounded-xl bg-surface-card border border-hairline overflow-hidden">
-          <div className="p-6 border-b border-hairline">
-            <div className="flex items-baseline justify-between gap-4">
+        {/* Main 8-col Column */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Consolidated Pipeline & Breakdowns Card */}
+          <div className="rounded-xl bg-surface-card border border-hairline overflow-hidden">
+            <div className="px-6 py-4 border-b border-hairline flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-medium text-ink-primary">
-                  Intake pipeline & dossier readiness
+                  Pipeline & breakdowns
                 </h2>
-                <p className="text-[13px] text-ink-secondary mt-0.5">
-                  Completion across verification and university submission stages
+                <p className="text-xs text-ink-secondary mt-0.5">
+                  {pipelineTab === 'stages'
+                    ? 'Completion across verification and submission stages'
+                    : pipelineTab === 'intake'
+                    ? 'Click any intake cycle to filter the overview'
+                    : 'Click any destination country to filter the overview'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => onSelectTab('applications')}
-                className="text-xs text-ink-secondary hover:text-ink-primary transition-colors duration-150 ease-quart shrink-0"
-              >
-                All applications ({filteredApplications.length}) →
-              </button>
+
+              <div className="inline-flex items-center bg-surface-deep border border-hairline rounded-lg p-0.5">
+                {[
+                  { id: 'stages', label: 'Stages' },
+                  { id: 'intake', label: `By intake (${intakeBreakdown.length})` },
+                  { id: 'country', label: `By country (${countryBreakdown.length})` },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setPipelineTab(t.id as any)}
+                    className={`h-7 px-2.5 rounded-md text-xs transition-colors ${
+                      pipelineTab === t.id
+                        ? 'bg-surface-card text-ink-primary font-medium'
+                        : 'text-ink-secondary hover:text-ink-primary'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Horizontal Stage Comparison Bars */}
-            <div className="mt-5 space-y-2.5">
-              {stages.map((st) => {
-                const pct = Math.min(100, Math.round((st.count / st.total) * 100));
-                const barClass =
-                  st.tone === 'brass'
-                    ? 'bg-brass'
-                    : st.tone === 'positive'
-                    ? 'bg-tone-positive'
-                    : 'bg-ink-muted/55';
-                const countClass =
-                  st.tone === 'brass'
-                    ? 'text-brass font-medium'
-                    : st.tone === 'positive'
-                    ? 'text-tone-positive font-medium'
-                    : 'text-ink-primary font-medium';
+            <div className="p-6">
+              {pipelineTab === 'stages' && (
+                <div className="space-y-2.5">
+                  {stages.map((st) => {
+                    const pct = Math.min(100, Math.round((st.count / st.total) * 100));
+                    const barClass =
+                      st.tone === 'brass'
+                        ? 'bg-brass'
+                        : st.tone === 'positive'
+                        ? 'bg-tone-positive'
+                        : 'bg-ink-muted/55';
+                    const countClass =
+                      st.tone === 'brass'
+                        ? 'text-brass font-medium'
+                        : st.tone === 'positive'
+                        ? 'text-tone-positive font-medium'
+                        : 'text-ink-primary font-medium';
 
-                return (
-                  <button
-                    key={st.key}
-                    type="button"
-                    onClick={() => onSelectTab(st.targetTab)}
-                    className="w-full text-left p-2 -mx-2 rounded-lg hover:bg-surface-raised/40 transition-colors duration-150 space-y-1.5 block"
-                  >
-                    <div className="flex items-center justify-between text-xs">
-                      <span
-                        className={
-                          st.tone === 'brass' ? 'text-ink-primary font-medium' : 'text-ink-secondary'
-                        }
+                    return (
+                      <button
+                        key={st.key}
+                        type="button"
+                        onClick={() => onSelectTab(st.targetTab)}
+                        className="w-full text-left p-2 -mx-2 rounded-lg hover:bg-surface-raised/40 transition-colors duration-150 space-y-1.5 block"
                       >
-                        {st.label}
-                      </span>
-                      <span className="tabular-nums text-ink-muted">
-                        <span className={countClass}>{st.count}</span> / {st.total}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-surface-deep overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${barClass}`}
-                        style={{ width: `${Math.max(pct, st.count > 0 ? 5 : 0)}%` }}
-                      />
-                    </div>
-                  </button>
-                );
-              })}
+                        <div className="flex items-center justify-between text-xs">
+                          <span
+                            className={
+                              st.tone === 'brass'
+                                ? 'text-ink-primary font-medium'
+                                : 'text-ink-secondary'
+                            }
+                          >
+                            {st.label}
+                          </span>
+                          <span className="tabular-nums text-ink-muted">
+                            <span className={countClass}>{st.count}</span> / {st.total}
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-surface-deep overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${barClass}`}
+                            style={{ width: `${Math.max(pct, st.count > 0 ? 5 : 0)}%` }}
+                          />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {pipelineTab === 'intake' && (
+                <div className="space-y-2">
+                  {intakeBreakdown.length === 0 ? (
+                    <p className="text-xs text-ink-muted py-2">No intake targets recorded yet.</p>
+                  ) : (
+                    intakeBreakdown.map((row) => {
+                      const isSelected = selectedIntake === row.intake;
+                      const canFilter = row.intake !== 'Unspecified';
+                      return (
+                        <button
+                          key={row.intake}
+                          type="button"
+                          disabled={!canFilter}
+                          onClick={() =>
+                            canFilter &&
+                            setSelectedIntake((prev) =>
+                              prev === row.intake ? 'all' : row.intake
+                            )
+                          }
+                          className={`w-full px-3.5 py-2.5 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors ${
+                            isSelected
+                              ? 'bg-brass-soft border-brass-border'
+                              : canFilter
+                              ? 'bg-surface-deep/60 border-hairline hover:border-hairline-strong'
+                              : 'bg-surface-deep/40 border-hairline opacity-75 cursor-default'
+                          }`}
+                        >
+                          <span
+                            className={`text-xs font-medium truncate ${
+                              isSelected ? 'text-brass' : 'text-ink-primary'
+                            }`}
+                          >
+                            {row.intake}
+                          </span>
+                          <div className="flex items-center gap-3 text-xs tabular-nums shrink-0">
+                            <span className="text-ink-secondary">
+                              <span className="font-medium text-ink-primary">
+                                {row.candidates}
+                              </span>{' '}
+                              {row.candidates === 1 ? 'student' : 'students'}
+                            </span>
+                            <span className="text-ink-muted">·</span>
+                            <span className="text-ink-secondary">
+                              <span className="font-medium text-ink-primary">
+                                {row.applications}
+                              </span>{' '}
+                              {row.applications === 1 ? 'app' : 'apps'}
+                            </span>
+                            {row.offers > 0 && (
+                              <>
+                                <span className="text-ink-muted">·</span>
+                                <span className="text-tone-positive font-medium">
+                                  {row.offers} {row.offers === 1 ? 'offer' : 'offers'}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {pipelineTab === 'country' && (
+                <div className="space-y-2">
+                  {countryBreakdown.length === 0 ? (
+                    <p className="text-xs text-ink-muted py-2">
+                      No destination countries recorded yet.
+                    </p>
+                  ) : (
+                    countryBreakdown.map((row) => {
+                      const isSelected = selectedCountry === row.country;
+                      const canFilter = row.country !== 'Unspecified';
+                      return (
+                        <button
+                          key={row.country}
+                          type="button"
+                          disabled={!canFilter}
+                          onClick={() =>
+                            canFilter &&
+                            setSelectedCountry((prev) =>
+                              prev === row.country ? 'all' : row.country
+                            )
+                          }
+                          className={`w-full px-3.5 py-2.5 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors ${
+                            isSelected
+                              ? 'bg-brass-soft border-brass-border'
+                              : canFilter
+                              ? 'bg-surface-deep/60 border-hairline hover:border-hairline-strong'
+                              : 'bg-surface-deep/40 border-hairline opacity-75 cursor-default'
+                          }`}
+                        >
+                          <span
+                            className={`text-xs font-medium truncate ${
+                              isSelected ? 'text-brass' : 'text-ink-primary'
+                            }`}
+                          >
+                            {row.country}
+                          </span>
+                          <div className="flex items-center gap-3 text-xs tabular-nums shrink-0">
+                            <span className="text-ink-secondary">
+                              <span className="font-medium text-ink-primary">
+                                {row.candidates}
+                              </span>{' '}
+                              {row.candidates === 1 ? 'student' : 'students'}
+                            </span>
+                            <span className="text-ink-muted">·</span>
+                            <span className="text-ink-secondary">
+                              <span className="font-medium text-ink-primary">
+                                {row.applications}
+                              </span>{' '}
+                              {row.applications === 1 ? 'app' : 'apps'}
+                            </span>
+                            {row.offers > 0 && (
+                              <>
+                                <span className="text-ink-muted">·</span>
+                                <span className="text-tone-positive font-medium">
+                                  {row.offers} {row.offers === 1 ? 'offer' : 'offers'}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Candidate Readiness Ledger Table */}
-          <div>
+          <div className="rounded-xl bg-surface-card border border-hairline overflow-hidden">
             <div className="px-6 py-3.5 flex items-center justify-between border-b border-hairline">
-              <span className="text-[13px] font-medium text-ink-primary">
+              <span className="text-sm font-medium text-ink-primary">
                 {selectedIntake === 'all'
                   ? 'Candidates in intake'
                   : `Candidates · ${selectedIntake}`}
@@ -839,93 +863,98 @@ export const DashboardStats: React.FC<StatsProps> = ({
           </div>
         </div>
 
-        {/* Right 1/3 Column: Workspace Action Items & Deadlines + Portal Queue */}
-        <div className="lg:col-span-4 space-y-5">
-          {/* Action items & deadlines */}
-          <div className="p-5 rounded-xl bg-surface-card border border-hairline space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-medium text-ink-primary">Action items & deadlines</h3>
-              <span className="text-xs tabular-nums text-ink-muted">
-                {actionItems.length} open
-              </span>
-            </div>
-
-            {actionItems.length === 0 ? (
-              <div className="py-4 flex items-center gap-2.5 text-xs text-ink-secondary">
-                <CheckCircle2 className="w-4 h-4 text-tone-positive shrink-0" strokeWidth={1.5} />
-                <span>All dossiers and upcoming deadlines are on track.</span>
-              </div>
-            ) : (
-              <div className="divide-y divide-hairline">
-                {actionItems.slice(0, 5).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={item.onClick}
-                    className="w-full py-2.5 first:pt-0 last:pb-0 flex items-start justify-between gap-3 text-left hover:opacity-85 transition-opacity"
-                  >
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      {item.kind === 'deadline' ? (
-                        <CalendarClock
-                          className={`w-4 h-4 shrink-0 mt-0.5 ${
-                            item.tone === 'negative' ? 'text-tone-negative' : 'text-brass'
-                          }`}
-                          strokeWidth={1.5}
-                        />
-                      ) : item.kind === 'deposit' ? (
-                        <AlertCircle
-                          className="w-4 h-4 text-brass shrink-0 mt-0.5"
-                          strokeWidth={1.5}
-                        />
-                      ) : (
-                        <FileWarning
-                          className="w-4 h-4 text-brass shrink-0 mt-0.5"
-                          strokeWidth={1.5}
-                        />
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-ink-primary truncate">
-                          {item.title}
-                        </p>
-                        <p className="text-xs text-ink-muted truncate">{item.subtitle}</p>
-                      </div>
-                    </div>
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium tabular-nums shrink-0 ${
-                        item.tone === 'negative'
-                          ? 'bg-tone-negative/10 text-tone-negative'
-                          : item.tone === 'brass'
-                          ? 'bg-brass-soft text-brass'
-                          : 'bg-surface-deep text-ink-secondary border border-hairline'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Portal queue */}
-          <div className="p-5 rounded-xl bg-surface-card border border-hairline space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-ink-primary">Portal queue</h3>
+        {/* Right 4-col Column: Consolidated Attention & Queue Card */}
+        <div className="lg:col-span-4 rounded-xl bg-surface-card border border-hairline overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-hairline flex items-center justify-between gap-2">
+            <div className="inline-flex items-center bg-surface-deep border border-hairline rounded-lg p-0.5">
               <button
                 type="button"
-                onClick={() => onSelectTab('applications')}
-                className="text-xs tabular-nums text-ink-muted hover:text-ink-primary transition-colors"
+                onClick={() => setRailTab('actions')}
+                className={`h-7 px-2.5 rounded-md text-xs transition-colors ${
+                  railTab === 'actions'
+                    ? 'bg-surface-card text-ink-primary font-medium'
+                    : 'text-ink-secondary hover:text-ink-primary'
+                }`}
               >
-                {filteredApplications.length} tracked →
+                Action items ({actionItems.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setRailTab('queue')}
+                className={`h-7 px-2.5 rounded-md text-xs transition-colors ${
+                  railTab === 'queue'
+                    ? 'bg-surface-card text-ink-primary font-medium'
+                    : 'text-ink-secondary hover:text-ink-primary'
+                }`}
+              >
+                Portal queue ({filteredApplications.length})
               </button>
             </div>
+          </div>
 
-            {filteredApplications.length === 0 ? (
-              <div className="pt-1 space-y-3">
+          <div className="p-5">
+            {railTab === 'actions' ? (
+              actionItems.length === 0 ? (
+                <div className="py-6 flex items-center gap-2.5 text-xs text-ink-secondary">
+                  <CheckCircle2 className="w-4 h-4 text-tone-positive shrink-0" strokeWidth={1.5} />
+                  <span>All dossiers and upcoming deadlines are on track.</span>
+                </div>
+              ) : (
+                <div className="divide-y divide-hairline">
+                  {actionItems.slice(0, 6).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={item.onClick}
+                      className="w-full py-3 first:pt-0 last:pb-0 flex items-start justify-between gap-3 text-left hover:opacity-85 transition-opacity"
+                    >
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        {item.kind === 'deadline' ? (
+                          <CalendarClock
+                            className={`w-4 h-4 shrink-0 mt-0.5 ${
+                              item.tone === 'negative' ? 'text-tone-negative' : 'text-brass'
+                            }`}
+                            strokeWidth={1.5}
+                          />
+                        ) : item.kind === 'deposit' ? (
+                          <AlertCircle
+                            className="w-4 h-4 text-brass shrink-0 mt-0.5"
+                            strokeWidth={1.5}
+                          />
+                        ) : (
+                          <FileWarning
+                            className="w-4 h-4 text-brass shrink-0 mt-0.5"
+                            strokeWidth={1.5}
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium text-ink-primary truncate">
+                            {item.title}
+                          </p>
+                          <p className="text-xs text-ink-muted truncate">{item.subtitle}</p>
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-medium tabular-nums shrink-0 ${
+                          item.tone === 'negative'
+                            ? 'bg-tone-negative/10 text-tone-negative'
+                            : item.tone === 'brass'
+                            ? 'bg-brass-soft text-brass'
+                            : 'bg-surface-deep text-ink-secondary border border-hairline'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )
+            ) : filteredApplications.length === 0 ? (
+              <div className="py-4 space-y-3">
                 <p className="text-[13px] text-ink-secondary leading-5">
                   {hasFilters
                     ? 'No applications match the active intake or country filter.'
-                    : 'No university applications logged yet. Create an application record or test autofill in the portal sandbox.'}
+                    : 'No university applications logged yet.'}
                 </p>
                 {!hasFilters && (
                   <button
@@ -938,45 +967,56 @@ export const DashboardStats: React.FC<StatsProps> = ({
                 )}
               </div>
             ) : (
-              <div className="divide-y divide-hairline">
-                {filteredApplications.slice(0, 4).map((a) => {
-                  const studentName = candidateNameById.get(a.candidateId);
-                  return (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => onSelectTab('applications')}
-                      className="w-full py-2.5 first:pt-0 last:pb-0 flex items-start justify-between gap-3 text-left hover:opacity-85 transition-opacity"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-ink-primary truncate">
-                          {a.institutionName}
-                        </p>
-                        <p className="text-xs text-ink-muted truncate">
-                          {a.programName} · {a.country}
-                        </p>
-                        {studentName && (
-                          <p className="text-[11px] text-ink-secondary truncate mt-0.5">
-                            {studentName}
+              <div className="space-y-3">
+                <div className="divide-y divide-hairline">
+                  {filteredApplications.slice(0, 6).map((a) => {
+                    const studentName = candidateNameById.get(a.candidateId);
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => onSelectTab('applications')}
+                        className="w-full py-3 first:pt-0 last:pb-0 flex items-start justify-between gap-3 text-left hover:opacity-85 transition-opacity"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium text-ink-primary truncate">
+                            {a.institutionName}
                           </p>
-                        )}
-                      </div>
-                      <div className="pt-0.5 shrink-0">
-                        <VerificationStamp
-                          tone={
-                            a.status === 'submitted' ||
-                            a.status === 'conditional_offer' ||
-                            a.status === 'unconditional_offer' ||
-                            a.status === 'enrolled'
-                              ? 'positive'
-                              : 'brass'
-                          }
-                          label={a.status.replace(/_/g, ' ').replace(/^./, (ch) => ch.toUpperCase())}
-                        />
-                      </div>
-                    </button>
-                  );
-                })}
+                          <p className="text-xs text-ink-muted truncate">
+                            {a.programName} · {a.country}
+                          </p>
+                          {studentName && (
+                            <p className="text-[11px] text-ink-secondary truncate mt-0.5">
+                              {studentName}
+                            </p>
+                          )}
+                        </div>
+                        <div className="pt-0.5 shrink-0">
+                          <VerificationStamp
+                            tone={
+                              a.status === 'submitted' ||
+                              a.status === 'conditional_offer' ||
+                              a.status === 'unconditional_offer' ||
+                              a.status === 'enrolled'
+                                ? 'positive'
+                                : 'brass'
+                            }
+                            label={a.status
+                              .replace(/_/g, ' ')
+                              .replace(/^./, (ch) => ch.toUpperCase())}
+                          />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onSelectTab('applications')}
+                  className="w-full pt-2 border-t border-hairline text-xs text-ink-secondary hover:text-ink-primary text-center transition-colors"
+                >
+                  Open applications board →
+                </button>
               </div>
             )}
           </div>
