@@ -556,6 +556,7 @@ export const App: React.FC = () => {
                     candidates={candidates}
                     members={teamMembers}
                     countryTeams={countryTeams}
+                    operatingCountries={organization?.operatingCountries}
                     currentUserId={currentUser?.id}
                     onCreateMember={handleCreateMember}
                     onUpdateMember={handleUpdateMember}
@@ -569,6 +570,7 @@ export const App: React.FC = () => {
                       handleSelectCandidate(cand);
                       setCurrentTab('candidates');
                     }}
+                    onOpenAgencySettings={() => setCurrentTab('admin-profile')}
                   />
                 )}
 
@@ -586,6 +588,7 @@ export const App: React.FC = () => {
                     onSaveProfile={handleSaveMyProfile}
                     onSaveOrganization={handleSaveOrganization}
                     onOpenModelProviders={() => setCurrentTab('ai-settings')}
+                    onOpenTeamDesks={() => setCurrentTab('organization')}
                   />
                 )}
               </>
