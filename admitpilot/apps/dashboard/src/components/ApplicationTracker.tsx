@@ -143,6 +143,7 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
   const [shortlistBusy, setShortlistBusy] = useState(false);
   const [selectedCatalogUniId, setSelectedCatalogUniId] = useState('');
   const [selectedCatalogProgId, setSelectedCatalogProgId] = useState('');
+  const [showAdvancedCreate, setShowAdvancedCreate] = useState(false);
 
   // Custom University state
   const [uName, setUName] = useState('');
@@ -596,6 +597,28 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
                                 <span className="font-mono text-brass tabular-nums">{condsPending}</span>
                               </div>
                             )}
+                          </div>
+
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="pt-2 border-t border-hairline flex items-center justify-between gap-2"
+                          >
+                            <select
+                              value={app.status}
+                              onChange={(e) =>
+                                onUpdateApplication(app.id, {
+                                  status: e.target.value as ApplicationStatus,
+                                })
+                              }
+                              aria-label={`Change stage for ${app.institutionName}`}
+                              className="h-7 w-full rounded bg-surface-card border border-hairline px-2 text-[11px] text-ink-secondary focus:outline-none focus:border-brass"
+                            >
+                              {(Object.keys(STATUS_META) as ApplicationStatus[]).map((st) => (
+                                <option key={st} value={st}>
+                                  {STATUS_META[st].label}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                         </div>
                       );
@@ -1303,35 +1326,20 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
             </div>
 
             <form onSubmit={handleCreate} className="p-6 space-y-4 max-h-[82vh] overflow-y-auto text-sm">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-ink-secondary mb-1.5">Candidate *</label>
-                  <select
-                    required
-                    value={candidateId}
-                    onChange={(e) => setCandidateId(e.target.value)}
-                    className="field-input"
-                  >
-                    {candidates.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.personal.legalGivenName} {c.personal.familyName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs text-ink-secondary mb-1.5">Priority</label>
-                  <select
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value as ApplicationPriority)}
-                    className="field-input"
-                  >
-                    <option value="high">High (First choice)</option>
-                    <option value="medium">Medium (Target)</option>
-                    <option value="low">Low (Safe / backup)</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs text-ink-secondary mb-1.5">Student *</label>
+                <select
+                  required
+                  value={candidateId}
+                  onChange={(e) => setCandidateId(e.target.value)}
+                  className="field-input"
+                >
+                  {candidates.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.personal.legalGivenName} {c.personal.familyName} ({c.personal.nationality})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {universities.length > 0 && (() => {
@@ -1475,20 +1483,6 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs text-ink-secondary mb-1.5">Degree level</label>
-                  <select
-                    value={degreeLevel}
-                    onChange={(e) => setDegreeLevel(e.target.value as any)}
-                    className="field-input"
-                  >
-                    <option value="Master's">Master's</option>
-                    <option value="Bachelor's">Bachelor's</option>
-                    <option value="Doctorate">Doctorate</option>
-                    <option value="Foundation">Foundation</option>
-                    <option value="Diploma">Diploma</option>
-                  </select>
-                </div>
-                <div>
                   <label className="block text-xs text-ink-secondary mb-1.5">Country</label>
                   <input
                     value={country}
@@ -1504,38 +1498,6 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
                     className="field-input"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-ink-secondary mb-1.5">Portal URL</label>
-                  <input
-                    value={portalUrl}
-                    onChange={(e) => setPortalUrl(e.target.value)}
-                    placeholder="https://admissions.ed.ac.uk"
-                    className="field-input font-mono text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-ink-secondary mb-1.5">
-                    Linked student portal login
-                  </label>
-                  <select
-                    value={portalCredentialId}
-                    onChange={(e) => setPortalCredentialId(e.target.value)}
-                    className="field-input text-xs"
-                  >
-                    <option value="">None selected</option>
-                    {createCredOptions.map((cr) => (
-                      <option key={cr.id} value={cr.id}>
-                        {cr.label} ({cr.loginEmail})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs text-ink-secondary mb-1.5">Deadline</label>
                   <input
@@ -1545,56 +1507,133 @@ export const ApplicationTracker: React.FC<AppTrackerProps> = ({
                     className="field-input font-mono tabular-nums text-xs"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs text-ink-secondary mb-1.5">Tuition fee</label>
-                  <input
-                    value={tuitionFee}
-                    onChange={(e) => setTuitionFee(e.target.value)}
-                    placeholder="GBP 34,000 / yr"
-                    className="field-input font-mono text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-ink-secondary mb-1.5">App fee</label>
-                  <input
-                    value={applicationFee}
-                    onChange={(e) => setApplicationFee(e.target.value)}
-                    placeholder="GBP 60"
-                    className="field-input font-mono text-xs"
-                  />
-                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-ink-secondary mb-1.5">Portal reference ID</label>
-                  <input
-                    value={referenceNumber}
-                    onChange={(e) => setReferenceNumber(e.target.value)}
-                    placeholder="Optional"
-                    className="field-input font-mono text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-ink-secondary mb-1.5">Target scholarship</label>
-                  <input
-                    value={scholarshipName}
-                    onChange={(e) => setScholarshipName(e.target.value)}
-                    placeholder="Global Excellence Award"
-                    className="field-input text-xs"
-                  />
-                </div>
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedCreate((s) => !s)}
+                  className="text-xs text-brass hover:underline font-medium"
+                >
+                  {showAdvancedCreate
+                    ? '− Hide optional portal, fee & note details'
+                    : '+ Optional portal, fee, priority & note details'}
+                </button>
               </div>
 
-              <div>
-                <label className="block text-xs text-ink-secondary mb-1.5">Consultant notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  className="field-input h-auto py-2"
-                />
-              </div>
+              {showAdvancedCreate && (
+                <div className="p-4 rounded-xl bg-surface-deep border border-hairline space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-ink-secondary mb-1.5">Degree level</label>
+                      <select
+                        value={degreeLevel}
+                        onChange={(e) => setDegreeLevel(e.target.value as any)}
+                        className="field-input"
+                      >
+                        <option value="Master's">Master's</option>
+                        <option value="Bachelor's">Bachelor's</option>
+                        <option value="Doctorate">Doctorate</option>
+                        <option value="Foundation">Foundation</option>
+                        <option value="Diploma">Diploma</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-ink-secondary mb-1.5">Priority</label>
+                      <select
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value as ApplicationPriority)}
+                        className="field-input"
+                      >
+                        <option value="high">High (First choice)</option>
+                        <option value="medium">Medium (Target)</option>
+                        <option value="low">Low (Safe / backup)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-ink-secondary mb-1.5">Portal URL</label>
+                      <input
+                        value={portalUrl}
+                        onChange={(e) => setPortalUrl(e.target.value)}
+                        placeholder="https://admissions.ed.ac.uk"
+                        className="field-input font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-ink-secondary mb-1.5">
+                        Linked student portal login
+                      </label>
+                      <select
+                        value={portalCredentialId}
+                        onChange={(e) => setPortalCredentialId(e.target.value)}
+                        className="field-input text-xs"
+                      >
+                        <option value="">None selected</option>
+                        {createCredOptions.map((cr) => (
+                          <option key={cr.id} value={cr.id}>
+                            {cr.label} ({cr.loginEmail})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-ink-secondary mb-1.5">Tuition fee</label>
+                      <input
+                        value={tuitionFee}
+                        onChange={(e) => setTuitionFee(e.target.value)}
+                        placeholder="GBP 34,000 / yr"
+                        className="field-input font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-ink-secondary mb-1.5">App fee</label>
+                      <input
+                        value={applicationFee}
+                        onChange={(e) => setApplicationFee(e.target.value)}
+                        placeholder="GBP 60"
+                        className="field-input font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-ink-secondary mb-1.5">Portal reference ID</label>
+                      <input
+                        value={referenceNumber}
+                        onChange={(e) => setReferenceNumber(e.target.value)}
+                        placeholder="Optional"
+                        className="field-input font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-ink-secondary mb-1.5">Target scholarship</label>
+                      <input
+                        value={scholarshipName}
+                        onChange={(e) => setScholarshipName(e.target.value)}
+                        placeholder="Global Excellence Award"
+                        className="field-input text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-ink-secondary mb-1.5">Consultant notes</label>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={2}
+                      className="field-input h-auto py-2"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2.5 pt-3 border-t border-hairline">
                 <button
