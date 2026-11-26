@@ -553,15 +553,21 @@ export class AIService {
 
     const systemPrompt = `You are a strict international university admissions document parser. Extract ONLY facts explicitly written in the document.
 ZERO-INVENTION RULE: Never guess, infer, or fabricate missing fields — return null for any field not clearly visible.
+MULTI-PAGE RULE: Inspect ALL attached page images (Page 1, Page 2, Page 3, ...) and all OCR text pages. On multi-page transcripts, final CGPA, cumulative GPA, total credits, and degree award dates are frequently on Page 2 or the last page.
 Format dates strictly as YYYY-MM-DD when full day/month/year are present, else null.
 Return STRICT JSON matching: ${hint}`;
+
+    const boundedText =
+      rawText.length <= 16000
+        ? rawText
+        : `${rawText.slice(0, 8000)}\n\n...[middle pages omitted]...\n\n${rawText.slice(-8000)}`;
 
     try {
       const promptBody = canUseVision
         ? `Extract structured fields from this ${category} document (${mediaList.length} scanned page${
             mediaList.length === 1 ? '' : 's'
-          }).${rawText ? `\n\nSupplemental OCR text:\n${rawText.slice(0, 5000)}` : ''}`
-        : `Document Text (${category}):\n${rawText.slice(0, 7000)}`;
+          }).${boundedText ? `\n\nSupplemental OCR & PDF text:\n${boundedText}` : ''}`
+        : `Document Text (${category}):\n${boundedText}`;
 
       const raw = await this.complete(promptBody, {
         systemPrompt,

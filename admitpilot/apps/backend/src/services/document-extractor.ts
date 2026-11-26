@@ -88,9 +88,12 @@ const DATE_TOKEN_RE =
  * using PDF.js glyph X/Y coordinates so form PDFs (IELTS eTRF, transcripts, passports)
  * keep labels aligned with values instead of dumping raw PDF object streams.
  */
-async function extractSpatialPdfText(dataBuffer: Buffer): Promise<string> {
+async function extractSpatialPdfText(
+  dataBuffer: Buffer
+): Promise<{ text: string; numPages: number; perPageChars: number[] }> {
   const pdfParseModule = await import('pdf-parse');
   const pdfParse = (pdfParseModule.default || pdfParseModule) as any;
+  const perPageChars: number[] = [];
 
   const data = await pdfParse(dataBuffer, {
     pagerender: async (pageData: any) => {
@@ -116,7 +119,10 @@ async function extractSpatialPdfText(dataBuffer: Buffer): Promise<string> {
         items.push({ str: s, x, y, w });
       }
 
-      if (items.length === 0) return '';
+      if (items.length === 0) {
+        perPageChars.push(0);
+        return '';
+      }
 
       // Sort top-to-bottom (descending Y), then left-to-right (ascending X)
       items.sort((a, b) => (Math.abs(b.y - a.y) > 4.2 ? b.y - a.y : a.x - b.x));
@@ -157,11 +163,17 @@ async function extractSpatialPdfText(dataBuffer: Buffer): Promise<string> {
         if (trimmedLine) lines.push(trimmedLine);
       }
 
-      return lines.join('\n');
+      const pageText = lines.join('\n');
+      perPageChars.push(pageText.length);
+      return pageText;
     },
   });
 
-  return (data.text || '').trim();
+  return {
+    text: (data.text || '').trim(),
+    numPages: Number(data?.numpages || perPageChars.length || 1),
+    perPageChars,
+  };
 }
 
 export class DocumentExtractorService {
@@ -189,9 +201,14 @@ export class DocumentExtractorService {
       rawText = preserveLineText;
     } else if (ext === '.pdf' || mimeType.includes('pdf')) {
       const dataBuffer = await fs.readFile(filePath);
+      let numPages = 1;
+      let perPageChars: number[] = [];
       try {
-        preserveLineText = await extractSpatialPdfText(dataBuffer);
-        rawText = preserveLineText;
+        const spatial = await extractSpatialPdfText(dataBuffer);
+        preserveLineText = spatial.text;
+        rawText = spatial.text;
+        numPages = spatial.numPages;
+        perPageChars = spatial.perPageChars;
       } catch (err) {
         console.warn('[AdmitPilot Extractor] Spatial PDF extraction fallback:', (err as Error).message);
         try {
@@ -200,6 +217,7 @@ export class DocumentExtractorService {
           const fallbackData = await pdfParse(dataBuffer);
           preserveLineText = fallbackData.text || '';
           rawText = preserveLineText;
+          numPages = Number(fallbackData?.numpages || 1);
         } catch {
           // ignore
         }
@@ -224,9 +242,16 @@ export class DocumentExtractorService {
         }
       }
 
-      // Scanned image-only PDF fallback: extract up to 3 embedded JPEG page scans for Vision AI + Tesseract OCR
-      if (rawText.trim().length < 40) {
-        const embeddedJpegs = this.extractPdfJpegs(dataBuffer, 3);
+      // Scanned or hybrid multi-page PDF fallback:
+      // Run whenever overall text is sparse (< 80 chars), ANY page has < 80 chars (e.g. Page 1 text + Page 2 scanned),
+      // or average chars/page < 220 across multi-page transcripts.
+      const hasScannedPage =
+        rawText.trim().length < 80 ||
+        perPageChars.some((cnt) => cnt < 80) ||
+        (numPages > 1 && rawText.trim().length < numPages * 220);
+
+      if (hasScannedPage) {
+        const embeddedJpegs = this.extractPdfJpegs(dataBuffer, 6);
         if (embeddedJpegs.length > 0) {
           const mediaList: Array<{ mimeType: string; base64Data: string }> = [];
           for (const jpg of embeddedJpegs) {
@@ -242,9 +267,15 @@ export class DocumentExtractorService {
           }
           try {
             const ocrText = await this.performOCRBatch(embeddedJpegs);
-            if (ocrText.trim().length > rawText.trim().length) {
-              preserveLineText = ocrText;
-              rawText = ocrText;
+            if (ocrText.trim().length > 0) {
+              if (rawText.trim().length >= 40) {
+                // Hybrid PDF: preserve digital text AND append OCR from scanned pages
+                preserveLineText = `${preserveLineText}\n\n--- Scanned Pages OCR ---\n${ocrText}`;
+                rawText = preserveLineText;
+              } else {
+                preserveLineText = ocrText;
+                rawText = ocrText;
+              }
               ocrApplied = true;
             }
           } catch (ocrErr) {
@@ -325,9 +356,9 @@ export class DocumentExtractorService {
 
   /**
    * Extracts embedded JPEG page scans (/DCTDecode) from single or multi-page scanned PDFs,
-   * filtering out tiny logo/icon thumbnails and keeping up to `maxPages` largest scans in page order.
+   * filtering out tiny logo/icon thumbnails and keeping up to `maxPages` scans in original page order.
    */
-  private extractPdfJpegs(pdfBuffer: Buffer, maxPages = 3): Buffer[] {
+  private extractPdfJpegs(pdfBuffer: Buffer, maxPages = 6): Buffer[] {
     const entries: Array<{ offset: number; buf: Buffer }> = [];
     const soi = Buffer.from([0xff, 0xd8, 0xff]);
     const eoi = Buffer.from([0xff, 0xd9]);
@@ -349,15 +380,11 @@ export class DocumentExtractorService {
     }
 
     if (entries.length === 0) return [];
-    // Filter out small embedded logos/stamps (< 18 KB) when larger page scans exist
-    const pageScans = entries.filter((e) => e.buf.byteLength >= 18 * 1024);
+    // Filter out tiny embedded logos/stamps (< 10 KB) when larger page scans exist
+    const pageScans = entries.filter((e) => e.buf.byteLength >= 10 * 1024);
     const pool = pageScans.length > 0 ? pageScans : entries;
-    // Keep top `maxPages` by size, then restore original PDF page order
-    const selected = [...pool]
-      .sort((a, b) => b.buf.byteLength - a.buf.byteLength)
-      .slice(0, maxPages)
-      .sort((a, b) => a.offset - b.offset);
-    return selected.map((e) => e.buf);
+    // Preserve original PDF page order so Page 1, Page 2, ... are all included
+    return pool.slice(0, maxPages).map((e) => e.buf);
   }
 
   private async performOCRBatch(sources: Array<string | Buffer>): Promise<string> {
