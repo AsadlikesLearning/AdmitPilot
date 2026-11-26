@@ -288,6 +288,19 @@ export const api = {
     return res.json();
   },
 
+  updateDocumentCategory: async (
+    candidateId: string,
+    docId: string,
+    category: DocumentCategory
+  ): Promise<CandidateDocument> => {
+    const res = await authFetch(`${API_BASE}/candidates/${candidateId}/documents/${docId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ category }),
+    });
+    if (!res.ok) throw new Error('Failed to update document category');
+    return res.json();
+  },
+
   downloadDocumentBlob: async (
     docId: string,
     mode: 'portal' | 'original' = 'portal',

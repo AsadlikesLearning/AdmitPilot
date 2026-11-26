@@ -287,6 +287,13 @@ export const App: React.FC = () => {
     );
   };
 
+  const handleUpdateDocumentCategory = async (docId: string, category: DocumentCategory) => {
+    if (!selectedCandidate) return;
+    const updatedDoc = await api.updateDocumentCategory(selectedCandidate.id, docId, category);
+    setCandidateDocs((prev) => prev.map((d) => (d.id === updatedDoc.id ? updatedDoc : d)));
+    setReviewDoc(updatedDoc);
+  };
+
   const handleDeleteDocument = async (docId: string) => {
     if (!selectedCandidate) return;
     await api.deleteDocument(selectedCandidate.id, docId);
@@ -790,9 +797,16 @@ export const App: React.FC = () => {
                     document={reviewDoc}
                     allDocuments={candidateDocs}
                     candidate={selectedCandidate}
+                    candidates={scopedCandidates}
+                    onSelectCandidate={(c) => {
+                      setSelectedCandidate(c);
+                      loadCandidateSubresources(c.id);
+                    }}
                     onSelectDocument={(doc) => setReviewDoc(doc)}
                     onReconcile={handleReconcileField}
                     onReextract={handleReextractDocument}
+                    onUpdateCategory={handleUpdateDocumentCategory}
+                    onUploadDocuments={handleUploadDocuments}
                   />
                 )}
 

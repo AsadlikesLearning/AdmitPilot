@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FileText,
   Edit2,
@@ -9,6 +9,8 @@ import {
   AlertTriangle,
   Eye,
   Code2,
+  Upload,
+  CheckCircle2,
 } from 'lucide-react';
 import { CandidateDocument, CandidateProfile, DocumentCategory } from 'admitpilot-shared';
 import { VerificationStamp, formatExtractionMethod, formatCategoryLabel } from './ui/Primitives';
@@ -18,32 +20,40 @@ interface DocumentReviewProps {
   document: CandidateDocument | null;
   allDocuments?: CandidateDocument[];
   candidate: CandidateProfile | null;
+  candidates?: CandidateProfile[];
+  onSelectCandidate?: (candidate: CandidateProfile) => void;
   onSelectDocument?: (doc: CandidateDocument) => void;
   onReconcile: (fieldKey: string, approvedValue: any, note?: string, documentId?: string) => void;
   onReextract?: (docId: string, category?: DocumentCategory | 'auto') => Promise<void>;
+  onUpdateCategory?: (docId: string, category: DocumentCategory) => Promise<void>;
+  onUploadDocuments?: (files: File[], category?: DocumentCategory | 'auto') => Promise<void>;
   onClose?: () => void;
 }
 
 const CATEGORY_OPTIONS: { value: DocumentCategory; label: string }[] = [
-  { value: 'passport', label: 'Passport / travel document' },
-  { value: 'transcript', label: 'Academic transcript' },
-  { value: 'degree', label: 'Degree certificate' },
-  { value: 'english_test', label: 'English test report' },
-  { value: 'cv', label: 'CV / resume' },
-  { value: 'sop', label: 'Statement of purpose' },
-  { value: 'lor', label: 'Letter of recommendation' },
-  { value: 'financial', label: 'Financial statement' },
-  { value: 'experience', label: 'Employment letter' },
-  { value: 'other', label: 'Other supporting document' },
+  { value: 'passport', label: 'Passport' },
+  { value: 'transcript', label: 'Transcript' },
+  { value: 'degree', label: 'Degree' },
+  { value: 'english_test', label: 'English test' },
+  { value: 'cv', label: 'CV / Resume' },
+  { value: 'sop', label: 'SOP' },
+  { value: 'lor', label: 'LOR' },
+  { value: 'financial', label: 'Financial' },
+  { value: 'experience', label: 'Experience' },
+  { value: 'other', label: 'Other' },
 ];
 
 export const DocumentReview: React.FC<DocumentReviewProps> = ({
   document,
   allDocuments = [],
   candidate,
+  candidates = [],
+  onSelectCandidate,
   onSelectDocument,
   onReconcile,
   onReextract,
+  onUpdateCategory,
+  onUploadDocuments,
   onClose,
 }) => {
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -54,8 +64,15 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<DocumentCategory>('passport');
   const [reextracting, setReextracting] = useState(false);
+  const [updatingCategory, setUpdatingCategory] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [showApproveDiff, setShowApproveDiff] = useState(false);
+  const [fieldFilter, setFieldFilter] = useState<'all' | 'pending' | 'confirmed'>('all');
+  const [statusBanner, setStatusBanner] = useState<{
+    tone: 'positive' | 'negative';
+    text: string;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!document) {
@@ -94,23 +111,112 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
     };
   }, [document?.id]);
 
+  const showBanner = (tone: 'positive' | 'negative', text: string) => {
+    setStatusBanner({ tone, text });
+    setTimeout(() => setStatusBanner((prev) => (prev?.text === text ? null : prev)), 4500);
+  };
+
+  const handleCategoryChange = async (newCategory: DocumentCategory) => {
+    setSelectedCategory(newCategory);
+    if (!document || newCategory === document.category) return;
+
+    setUpdatingCategory(true);
+    try {
+      if (onUpdateCategory) {
+        await onUpdateCategory(document.id, newCategory);
+        showBanner('positive', `Category set to ${formatCategoryLabel(newCategory)}`);
+      }
+      if (onReextract) {
+        setReextracting(true);
+        await onReextract(document.id, newCategory);
+        showBanner(
+          'positive',
+          `Re-classified as ${formatCategoryLabel(newCategory)} and refreshed extracted fields`
+        );
+      }
+    } catch (err: any) {
+      showBanner('negative', err?.message || 'Failed to update category');
+    } finally {
+      setUpdatingCategory(false);
+      setReextracting(false);
+    }
+  };
+
+  const handleReextractClick = async () => {
+    if (!document || !onReextract) return;
+    setReextracting(true);
+    try {
+      await onReextract(document.id, selectedCategory);
+      showBanner('positive', `Extraction refreshed as ${formatCategoryLabel(selectedCategory)}`);
+    } catch (err: any) {
+      showBanner('negative', err?.message || 'Re-extraction failed');
+    } finally {
+      setReextracting(false);
+    }
+  };
+
   if (!document || !candidate) {
     return (
       <div className="space-y-5">
-        <div>
-          <h1 className="text-[28px] leading-[1.15] font-medium text-ink-primary tracking-[-0.015em]">
-            Document review
-          </h1>
-          <p className="text-sm text-ink-secondary mt-1.5">
-            Side-by-side source preview, extraction audit, and portal-ready downloads
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-[28px] leading-[1.15] font-medium text-ink-primary tracking-[-0.015em]">
+              Document review
+            </h1>
+            <p className="text-sm text-ink-secondary mt-1.5">
+              Side-by-side source preview, extraction audit, and portal-ready downloads
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {candidates.length > 0 && onSelectCandidate && (
+              <select
+                value={candidate?.id || ''}
+                onChange={(e) => {
+                  const found = candidates.find((c) => c.id === e.target.value);
+                  if (found) onSelectCandidate(found);
+                }}
+                className="field-input h-9 w-auto text-xs"
+              >
+                {candidates.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.personal.legalGivenName} {c.personal.familyName}
+                  </option>
+                ))}
+              </select>
+            )}
+            {onUploadDocuments && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.txt"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (files.length > 0) await onUploadDocuments(files, 'auto');
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn-primary"
+                >
+                  <Upload className="w-4 h-4" strokeWidth={1.5} />
+                  <span>Upload document</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="p-12 rounded-xl bg-surface-card border border-hairline text-center space-y-2">
           <FileText className="w-4 h-4 text-ink-muted mx-auto" strokeWidth={1.5} />
           <p className="text-sm font-medium text-ink-primary">No document selected</p>
           <p className="text-[13px] text-ink-secondary max-w-md mx-auto">
-            Upload or choose a passport, academic transcript, or language score report under a candidate dossier to inspect and verify extracted fields
+            Upload or choose a passport, academic transcript, or language score report to inspect and verify extracted fields
           </p>
         </div>
       </div>
@@ -119,6 +225,14 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
 
   const fields = document.extractedFields || {};
   const entries = Object.entries(fields);
+  const filteredEntries = entries.filter(([, valObj]: [string, any]) => {
+    const isVerified = Boolean(valObj?.verified);
+    if (fieldFilter === 'pending') return !isVerified;
+    if (fieldFilter === 'confirmed') return isVerified;
+    return true;
+  });
+  const pendingCount = entries.filter(([, v]: [string, any]) => !v?.verified).length;
+  const confirmedCount = entries.length - pendingCount;
   const conflicts = document.conflicts || [];
   const portalName = document.portalFileName || document.fileName;
 
@@ -130,6 +244,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
   const saveEdit = (key: string) => {
     onReconcile(key, editValue, 'Manual consultant correction', document.id);
     setEditingKey(null);
+    showBanner('positive', 'Updated field value on student dossier');
   };
 
   const handleDownloadPortalFile = async () => {
@@ -141,19 +256,9 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
     }
   };
 
-  const handleReextractClick = async () => {
-    if (!onReextract) return;
-    setReextracting(true);
-    try {
-      await onReextract(document.id, selectedCategory);
-    } finally {
-      setReextracting(false);
-    }
-  };
-
   return (
-    <div className="space-y-5">
-      {/* Header & Document Switcher */}
+    <div className="space-y-4">
+      {/* Header & Student / Action Controls */}
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div className="space-y-2 min-w-0">
           <h1 className="text-[28px] leading-[1.15] font-medium text-ink-primary tracking-[-0.015em]">
@@ -189,21 +294,47 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {allDocuments.length > 1 && onSelectDocument && (
+          {candidates.length > 1 && onSelectCandidate && (
             <select
-              value={document.id}
+              value={candidate.id}
               onChange={(e) => {
-                const target = allDocuments.find((d) => d.id === e.target.value);
-                if (target) onSelectDocument(target);
+                const found = candidates.find((c) => c.id === e.target.value);
+                if (found) onSelectCandidate(found);
               }}
-              className="field-input h-9 w-auto max-w-[300px] text-xs"
+              aria-label="Switch student in Document Review"
+              className="field-input h-9 w-auto max-w-[210px] text-xs"
             >
-              {allDocuments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {formatCategoryLabel(d.category)} · {d.fileName}
+              {candidates.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.personal.legalGivenName} {c.personal.familyName}
                 </option>
               ))}
             </select>
+          )}
+
+          {onUploadDocuments && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.txt"
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length > 0) await onUploadDocuments(files, 'auto');
+                  e.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="btn-secondary"
+              >
+                <Upload className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
+                <span>Upload</span>
+              </button>
+            </>
           )}
 
           <button
@@ -214,7 +345,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
             title={`Download standardized portal file: ${portalName}`}
           >
             <Download className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
-            <span className="font-mono text-xs">{portalName}</span>
+            <span className="hidden sm:inline">Download</span>
           </button>
 
           {entries.length > 0 && (
@@ -234,35 +365,106 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
         </div>
       </div>
 
-      {/* Category Re-Classification & Re-Extraction Bar */}
-      {onReextract && (
-        <div className="p-3.5 rounded-xl bg-surface-card border border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-ink-muted">Document category:</span>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as DocumentCategory)}
-              className="field-input h-8 w-auto text-xs"
-            >
-              {CATEGORY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <span className="text-ink-muted">
-              Portal upload filename: <span className="font-mono text-ink-primary">{portalName}</span>
-            </span>
-          </div>
+      {/* Inline Status Banner */}
+      {statusBanner && (
+        <div
+          className={`px-4 py-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+            statusBanner.tone === 'positive'
+              ? 'bg-surface-card border-tone-positive/40 text-tone-positive'
+              : 'bg-surface-card border-tone-negative/40 text-tone-negative'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            {statusBanner.tone === 'positive' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+            ) : (
+              <AlertTriangle className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+            )}
+            <span>{statusBanner.text}</span>
+          </span>
           <button
             type="button"
-            onClick={handleReextractClick}
-            disabled={reextracting}
-            className="btn-secondary h-8 px-3 text-xs self-start sm:self-auto"
+            onClick={() => setStatusBanner(null)}
+            className="text-ink-muted hover:text-ink-primary"
           >
-            <RefreshCw className={`w-4 h-4 text-ink-muted ${reextracting ? 'animate-spin' : ''}`} strokeWidth={1.5} />
-            <span>{reextracting ? 'Re-running parser...' : 'Re-run extraction'}</span>
+            <X className="w-3.5 h-3.5" strokeWidth={1.5} />
           </button>
+        </div>
+      )}
+
+      {/* Document Queue Strip (1-Click Switching Across Student Documents) */}
+      {allDocuments.length > 0 && onSelectDocument && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {allDocuments.map((d) => {
+            const active = d.id === document.id;
+            const tone =
+              d.verificationStatus === 'conflict'
+                ? 'negative'
+                : d.verificationStatus === 'verified'
+                  ? 'positive'
+                  : 'brass';
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => onSelectDocument(d)}
+                className={`px-3 py-2 rounded-lg border text-left shrink-0 transition-colors max-w-[240px] ${
+                  active
+                    ? 'bg-surface-raised border-brass-border'
+                    : 'bg-surface-card border-hairline hover:border-hairline-strong'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <VerificationStamp tone={tone} label={formatCategoryLabel(d.category)} />
+                  <span className="font-mono text-[10px] text-ink-muted">
+                    {Object.keys(d.extractedFields || {}).length}f
+                  </span>
+                </div>
+                <p className="text-xs text-ink-primary truncate mt-1">{d.fileName}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Interactive Category Selector Pills & Re-Run Extraction Bar */}
+      {(onUpdateCategory || onReextract) && (
+        <div className="p-3.5 rounded-xl bg-surface-card border border-hairline flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-ink-muted mr-1 shrink-0">Category:</span>
+            {CATEGORY_OPTIONS.map((opt) => {
+              const active = selectedCategory === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  disabled={updatingCategory || reextracting}
+                  onClick={() => handleCategoryChange(opt.value)}
+                  className={`px-2.5 py-1 rounded-md border transition-colors ${
+                    active
+                      ? 'bg-surface-raised border-brass text-ink-primary font-medium'
+                      : 'bg-surface-deep border-hairline text-ink-secondary hover:text-ink-primary'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          {onReextract && (
+            <button
+              type="button"
+              onClick={handleReextractClick}
+              disabled={reextracting || updatingCategory}
+              className="btn-secondary h-8 px-3 text-xs shrink-0 self-start lg:self-auto"
+            >
+              <RefreshCw
+                className={`w-4 h-4 text-ink-muted ${reextracting ? 'animate-spin' : ''}`}
+                strokeWidth={1.5}
+              />
+              <span>{reextracting ? 'Re-running parser...' : 'Re-run extraction'}</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -323,7 +525,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                   }`}
                 >
                   <Eye className="w-4 h-4" strokeWidth={1.5} />
-                  <span>Document preview</span>
+                  <span>Source preview</span>
                 </button>
                 <button
                   type="button"
@@ -358,41 +560,78 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                   <img
                     src={previewUrl}
                     alt={document.fileName}
-                    className="max-w-full max-h-full object-contain"
+                    className="max-h-full max-w-full object-contain"
                   />
                 ) : (
-                  <div className="p-6 font-mono text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap w-full h-full overflow-y-auto">
-                    {document.extractedText || 'Preview unavailable for this file format'}
+                  <div className="text-center p-6 space-y-2 text-xs text-ink-muted">
+                    <p>Inline preview unavailable for this file type</p>
+                    <button
+                      type="button"
+                      onClick={() => setLeftMode('text')}
+                      className="btn-secondary h-8 text-xs"
+                    >
+                      View extracted text
+                    </button>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="p-4 rounded-lg bg-surface-deep border border-hairline font-mono text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap h-[450px] overflow-y-auto">
+              <pre className="p-4 rounded-lg bg-surface-deep border border-hairline font-mono text-xs text-ink-secondary whitespace-pre-wrap leading-relaxed h-[450px] overflow-y-auto">
                 {document.extractedText || 'No raw text stream extracted from this file'}
+              </pre>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Extracted Fields & Audit Trail */}
+        <div className="p-6 flex flex-col">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 className="text-xs font-medium text-ink-secondary">
+              Extracted dossier fields ({filteredEntries.length} of {entries.length})
+            </h3>
+            {entries.length > 0 && (
+              <div className="inline-flex rounded-lg bg-surface-deep border border-hairline p-0.5 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setFieldFilter('all')}
+                  className={`px-2 py-0.5 rounded ${
+                    fieldFilter === 'all' ? 'bg-surface-raised text-ink-primary' : 'text-ink-muted'
+                  }`}
+                >
+                  All ({entries.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFieldFilter('pending')}
+                  className={`px-2 py-0.5 rounded ${
+                    fieldFilter === 'pending' ? 'bg-surface-raised text-ink-primary' : 'text-ink-muted'
+                  }`}
+                >
+                  Pending ({pendingCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFieldFilter('confirmed')}
+                  className={`px-2 py-0.5 rounded ${
+                    fieldFilter === 'confirmed' ? 'bg-surface-raised text-ink-primary' : 'text-ink-muted'
+                  }`}
+                >
+                  Confirmed ({confirmedCount})
+                </button>
               </div>
             )}
           </div>
 
-          <p className="mt-4 text-xs text-ink-muted">
-            Confirmed values record source document provenance and consultant timestamp without altering unverified fields
-          </p>
-        </div>
-
-        {/* Right: Extracted Structured Fields */}
-        <div className="p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-ink-primary">Extracted dossier fields</span>
-              <span className="font-mono text-xs text-ink-muted tabular-nums">{entries.length} detected</span>
-            </div>
-
-            {entries.length === 0 ? (
+          <div className="flex-1">
+            {filteredEntries.length === 0 ? (
               <div className="py-12 text-center text-ink-muted text-sm">
-                No structured fields extracted from this document
+                {entries.length === 0
+                  ? 'No structured fields extracted from this document'
+                  : 'No fields match this filter'}
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[465px] overflow-y-auto pr-1">
-                {entries.map(([key, valObj]: [string, any]) => {
+                {filteredEntries.map(([key, valObj]: [string, any]) => {
                   const val = valObj?.value ?? valObj;
                   const confidence = typeof valObj?.confidence === 'number' ? valObj.confidence : 0.92;
                   const isVerified = Boolean(valObj?.verified);
@@ -458,9 +697,10 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                             </button>
                             <button
                               type="button"
-                              onClick={() =>
-                                onReconcile(key, val, 'Consultant verified', document.id)
-                              }
+                              onClick={() => {
+                                onReconcile(key, val, 'Consultant verified', document.id);
+                                showBanner('positive', `Confirmed ${humanKey}`);
+                              }}
                               className="h-7 px-2.5 rounded-md bg-surface-raised border border-hairline hover:border-hairline-strong text-xs text-ink-primary transition-colors duration-150 ease-quart"
                             >
                               {isVerified ? 'Confirmed' : 'Confirm'}
@@ -495,7 +735,9 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
             </div>
             <div className="p-6 space-y-3 flex-1 overflow-y-auto text-xs">
               <p className="text-ink-secondary">
-                Review the extracted values from <span className="font-medium text-ink-primary">{document.fileName}</span> before applying them to{' '}
+                Review the extracted values from{' '}
+                <span className="font-medium text-ink-primary">{document.fileName}</span> before
+                applying them to{' '}
                 <span className="font-medium text-ink-primary">
                   {candidate.personal.legalGivenName} {candidate.personal.familyName}
                 </span>
@@ -533,7 +775,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                 })}
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-hairline flex justify-end gap-2.5">
+            <div className="px-6 py-4 border-t border-hairline flex justify-end gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setShowApproveDiff(false)}
@@ -548,6 +790,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                     onReconcile(k, (v as any).value ?? v, 'Batch consultant approved', document.id);
                   }
                   setShowApproveDiff(false);
+                  showBanner('positive', `Applied ${entries.length} fields to dossier`);
                 }}
                 className="btn-primary"
               >

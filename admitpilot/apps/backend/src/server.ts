@@ -983,6 +983,33 @@ app.post('/api/candidates/:id/documents/:docId/reextract', async (req, res) => {
   }
 });
 
+// Update document category & portal filename immediately
+app.patch('/api/candidates/:id/documents/:docId', async (req, res) => {
+  try {
+    const candidateId = req.params.id as string;
+    const docId = req.params.docId as string;
+    const category = req.body?.category as DocumentCategory | undefined;
+    if (!category) return res.status(400).json({ error: 'category is required' });
+
+    const candidate = await store.getCandidate(candidateId);
+    const existingDoc = await store.getDocument(docId);
+    if (!candidate || !existingDoc) {
+      return res.status(404).json({ error: 'Candidate or document not found' });
+    }
+
+    const updatedDoc: CandidateDocument = {
+      ...existingDoc,
+      category,
+      portalFileName: buildPortalFileName(candidate, category, existingDoc.fileName),
+      updatedAt: new Date().toISOString(),
+    };
+    await store.saveDocument(updatedDoc);
+    res.json(updatedDoc);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Delete a document
 app.delete('/api/candidates/:id/documents/:docId', async (req, res) => {
   try {
