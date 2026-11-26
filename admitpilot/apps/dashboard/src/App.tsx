@@ -53,9 +53,25 @@ export const App: React.FC = () => {
   const [isCandidateModalOpen, setIsCandidateModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [viewScope, setViewScope] = useState<'assigned' | 'all'>('all');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      return localStorage.getItem('admitpilot-theme') === 'light' ? 'light' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
   const [editingCandidate, setEditingCandidate] = useState<CandidateProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('admitpilot-theme', theme);
+    } catch {
+      // ignore storage errors
+    }
+  }, [theme]);
 
   useEffect(() => {
     loadAllData();
@@ -480,6 +496,8 @@ export const App: React.FC = () => {
           }
           currentUser={currentUser}
           isAdminActive={currentTab === 'admin-profile'}
+          theme={theme}
+          onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
           storageStatus={storageStatus}
           onOpenActiveCandidate={() => setCurrentTab('candidates')}
           onOpenAdminProfile={() => setCurrentTab('admin-profile')}

@@ -585,7 +585,7 @@ export const AdminProfileView: React.FC<AdminProfileViewProps> = ({
         {/* Right 5 Columns: Credential Card + Quick Launch Checklist + Notifications */}
         <div className="lg:col-span-5 space-y-5">
           {/* Officer Credential Card */}
-          <div className="rounded-xl bg-[#1b1a17] border border-brass-border overflow-hidden shadow-[inset_0_1px_0_rgba(212,168,83,0.14)]">
+          <div className="rounded-xl bg-surface-card border border-brass-border overflow-hidden shadow-[inset_0_1px_0_rgba(212,168,83,0.14)]">
             <div className="px-5 py-3.5 border-b border-[rgba(212,168,83,0.14)] flex items-center justify-between">
               <span className="font-mono text-xs text-brass">Agency owner credential</span>
               <VerificationStamp tone="positive" label="active" />

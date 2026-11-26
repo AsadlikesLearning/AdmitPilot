@@ -97,7 +97,7 @@ export const PassportCredentialCard: React.FC<{
   const hasPassport = Boolean(candidate.passport?.passportNumber);
 
   return (
-    <div className="rounded-xl bg-[#1b1a17] border border-brass-border overflow-hidden flex flex-col justify-between shadow-[inset_0_1px_0_rgba(212,168,83,0.14)]">
+    <div className="rounded-xl bg-surface-card border border-brass-border overflow-hidden flex flex-col justify-between shadow-[inset_0_1px_0_rgba(212,168,83,0.14)]">
       {/* Top Passport Foil Header */}
       <div className="px-5 pt-4 pb-3 border-b border-[rgba(212,168,83,0.14)] flex items-center justify-between">
         <div className="flex items-center gap-2.5">

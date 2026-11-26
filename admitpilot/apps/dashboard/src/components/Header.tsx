@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, FolderOpen, Database, ArrowLeftRight } from 'lucide-react';
+import { Search, FolderOpen, Database, ArrowLeftRight, Sun, Moon } from 'lucide-react';
 import { UserProfile } from 'admitpilot-shared';
 
 interface HeaderProps {
@@ -8,6 +8,8 @@ interface HeaderProps {
   activeCandidateName?: string;
   currentUser?: UserProfile | null;
   isAdminActive?: boolean;
+  theme?: 'dark' | 'light';
+  onToggleTheme?: () => void;
   storageStatus?: {
     engine?: 'supabase_postgres' | 'local_json';
     connected?: boolean;
@@ -43,6 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
   activeCandidateName,
   currentUser,
   isAdminActive,
+  theme = 'dark',
+  onToggleTheme,
   storageStatus,
   onOpenActiveCandidate,
   onOpenAdminProfile,
@@ -102,6 +106,26 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         <div className="pl-2.5 border-l border-hairline flex items-center gap-1.5">
+          {onToggleTheme && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={theme === 'light'}
+              aria-label="Toggle light mode"
+              onClick={onToggleTheme}
+              title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              className="h-8 px-2.5 rounded-lg bg-surface-card border border-hairline hover:border-hairline-strong text-xs text-ink-secondary hover:text-ink-primary inline-flex items-center gap-1.5 transition-colors duration-150 ease-quart"
+            >
+              {theme === 'light' ? (
+                <Moon className="w-3.5 h-3.5 text-brass" strokeWidth={1.5} />
+              ) : (
+                <Sun className="w-3.5 h-3.5 text-brass" strokeWidth={1.5} />
+              )}
+              <span className="hidden sm:inline">
+                {theme === 'light' ? 'Dark mode' : 'Light mode'}
+              </span>
+            </button>
+          )}
           {onSwitchAccount && (
             <button
               type="button"
