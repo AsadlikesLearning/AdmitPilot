@@ -23,8 +23,11 @@ import {
   Plus,
   Download,
   X,
+  ArrowLeft,
+  ClipboardList,
 } from 'lucide-react';
 import {
+  ApplicationRecord,
   CandidateProfile,
   CandidateDocument,
   CandidatePortalCredential,
@@ -46,8 +49,11 @@ interface CandidateDetailProps {
   candidate: CandidateProfile;
   documents: CandidateDocument[];
   credentials: CandidatePortalCredential[];
+  applications?: ApplicationRecord[];
   members?: UserProfile[];
   countryTeams?: CountryTeam[];
+  onBackToList?: () => void;
+  onOpenApplicationsTab?: () => void;
   onUploadDocuments: (files: File[], category?: DocumentCategory | 'auto') => Promise<void>;
   onReextractDocument?: (docId: string, category?: DocumentCategory | 'auto') => Promise<void>;
   onDeleteDocument?: (docId: string) => Promise<void>;
@@ -80,8 +86,11 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
   candidate,
   documents,
   credentials,
+  applications = [],
   members = [],
   countryTeams = [],
+  onBackToList,
+  onOpenApplicationsTab,
   onUploadDocuments,
   onReextractDocument,
   onDeleteDocument,
@@ -96,6 +105,7 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<
     | 'overview'
+    | 'applications'
     | 'credentials'
     | 'documents'
     | 'personal'
@@ -266,11 +276,11 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
     value,
     mono,
   }) => (
-    <div>
+    <div className="min-w-0">
       <span className="block text-xs text-ink-muted">{label}</span>
       <span
-        className={`block mt-1 text-sm text-ink-primary ${
-          mono ? 'font-mono tabular-nums' : 'font-normal'
+        className={`block mt-1 text-sm text-ink-primary break-words ${
+          mono ? 'font-mono tabular-nums break-all' : 'font-normal'
         }`}
       >
         {value && String(value).trim() ? value : '—'}
@@ -278,10 +288,77 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
     </div>
   );
 
+  const hasDocCat = (cat: DocumentCategory) => documents.some((d) => d.category === cat);
+  const conflictCount = Object.keys(candidate.conflicts || {}).length;
+  const readinessChecks = [
+    {
+      id: 'passport',
+      label: 'Passport',
+      ready: hasDocCat('passport') || Boolean(candidate.passport?.passportNumber),
+      onClick: () => setIsUploadModalOpen(true),
+    },
+    {
+      id: 'transcript',
+      label: 'Transcript',
+      ready: hasDocCat('transcript') || candidate.education.length > 0,
+      onClick: () => setIsUploadModalOpen(true),
+    },
+    {
+      id: 'english',
+      label: 'English test',
+      ready: hasDocCat('english_test') || candidate.englishTests.length > 0,
+      onClick: () => setIsUploadModalOpen(true),
+    },
+    {
+      id: 'cv',
+      label: 'CV / SOP',
+      ready: hasDocCat('cv') || hasDocCat('sop'),
+      onClick: () => setIsUploadModalOpen(true),
+    },
+    {
+      id: 'inbox',
+      label: 'Portal inbox',
+      ready: Boolean(primaryStudentEmail),
+      onClick: () => {
+        setActiveTab('credentials');
+        if (!primaryStudentEmail) openNewCredModal('dedicated_email');
+      },
+    },
+    {
+      id: 'conflicts',
+      label: conflictCount > 0 ? `${conflictCount} conflict${conflictCount === 1 ? '' : 's'}` : '0 conflicts',
+      ready: conflictCount === 0,
+      isNegative: conflictCount > 0,
+      onClick: () => {
+        if (documents[0] && onSelectReviewDoc) onSelectReviewDoc(documents[0]);
+        else setActiveTab('documents');
+      },
+    },
+  ];
+  const readyScore = Math.round(
+    (readinessChecks.filter((c) => c.ready).length / readinessChecks.length) * 100
+  );
+
   return (
     <div className="bg-surface-card border border-hairline rounded-xl overflow-hidden">
+      {onBackToList && (
+        <div className="px-6 py-2.5 border-b border-hairline bg-surface-deep/40 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onBackToList}
+            className="text-xs text-ink-secondary hover:text-ink-primary inline-flex items-center gap-1.5 transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" strokeWidth={1.5} />
+            <span>Back to candidates</span>
+          </button>
+          <span className="font-mono text-[11px] text-ink-muted">
+            Portal readiness {readyScore}%
+          </span>
+        </div>
+      )}
+
       {/* Top Dossier Header */}
-      <div className="p-6 border-b border-hairline flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-6 border-b border-hairline flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0">
           <div className="w-12 h-12 rounded-lg bg-surface-deep border border-hairline font-mono text-base font-medium text-brass flex items-center justify-center shrink-0">
             {candidate.personal.legalGivenName[0] || 'C'}
@@ -388,10 +465,36 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
         </div>
       </div>
 
+      {/* Portal Readiness Checklist */}
+      <div className="px-6 py-3 border-b border-hairline bg-surface-deep/25 flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {readinessChecks.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={item.onClick}
+              title={item.ready ? `${item.label} verified` : `Click to resolve ${item.label}`}
+              className="px-2.5 py-1 rounded-md bg-surface-card border border-hairline hover:border-hairline-strong inline-flex items-center gap-1.5 text-xs transition-colors"
+            >
+              <VerificationStamp
+                tone={item.isNegative ? 'negative' : item.ready ? 'positive' : 'brass'}
+                label={item.label}
+              />
+            </button>
+          ))}
+        </div>
+        {!onBackToList && (
+          <span className="font-mono text-[11px] text-ink-muted shrink-0">
+            Portal readiness {readyScore}%
+          </span>
+        )}
+      </div>
+
       {/* Sub-navigation Tabs */}
       <div className="flex border-b border-hairline px-6 bg-surface-deep/50 overflow-x-auto">
         {[
           { id: 'overview', label: 'Summary', icon: User },
+          { id: 'applications', label: 'Applications', count: applications.length, icon: ClipboardList },
           { id: 'credentials', label: 'Credentials & emails', count: credentials.length, icon: KeyRound },
           { id: 'documents', label: 'Documents', count: documents.length, icon: FileText },
           { id: 'passport', label: 'Passport & MRZ', icon: Shield },
@@ -1248,6 +1351,115 @@ export const CandidateDetail: React.FC<CandidateDetailProps> = ({
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'applications' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-medium text-ink-primary">
+                  University applications for {candidate.personal.legalGivenName}{' '}
+                  {candidate.personal.familyName}
+                </h3>
+                <p className="text-xs text-ink-muted mt-0.5">
+                  Live offer stages, intake deadlines, CAS/visa progress, and Chrome extension autofill history
+                </p>
+              </div>
+              {onOpenApplicationsTab && (
+                <button type="button" onClick={onOpenApplicationsTab} className="btn-secondary shrink-0">
+                  <ExternalLink className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
+                  <span>Open applications tracker</span>
+                </button>
+              )}
+            </div>
+
+            {applications.length === 0 ? (
+              <div className="p-8 rounded-xl bg-surface-deep border border-hairline text-center space-y-2">
+                <p className="text-sm text-ink-muted">No university applications linked to this student yet</p>
+                {onOpenApplicationsTab && (
+                  <button type="button" onClick={onOpenApplicationsTab} className="btn-primary text-xs">
+                    <Plus className="w-4 h-4" strokeWidth={1.5} />
+                    <span>Create application</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {applications.map((app) => (
+                  <div
+                    key={app.id}
+                    className="p-4 rounded-xl bg-surface-deep border border-hairline space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium text-ink-primary">{app.institutionName}</p>
+                        <p className="text-xs text-ink-secondary mt-0.5">
+                          {app.programName} · {app.country}
+                          {app.intake ? ` · ${app.intake}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <VerificationStamp
+                          tone={
+                            app.status === 'unconditional_offer' ||
+                            app.status === 'conditional_offer' ||
+                            app.status === 'enrolled'
+                              ? 'positive'
+                              : app.status === 'rejected'
+                                ? 'negative'
+                                : 'brass'
+                          }
+                          label={app.status.replace(/_/g, ' ')}
+                          meta={app.deadline ? `Due ${app.deadline}` : undefined}
+                        />
+                      </div>
+                    </div>
+
+                    {(app.casStatus || app.visaStatus || app.portalUrl) && (
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted pt-1 border-t border-hairline">
+                        {app.casStatus && (
+                          <span>
+                            CAS/I-20: <span className="font-mono text-ink-primary">{app.casStatus.replace(/_/g, ' ')}</span>
+                          </span>
+                        )}
+                        {app.visaStatus && (
+                          <span>
+                            Visa: <span className="font-mono text-ink-primary">{app.visaStatus.replace(/_/g, ' ')}</span>
+                          </span>
+                        )}
+                        {app.portalUrl && (
+                          <a
+                            href={app.portalUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-brass hover:underline inline-flex items-center gap-1 ml-auto"
+                          >
+                            <span>Open portal</span>
+                            <ExternalLink className="w-3 h-3" strokeWidth={1.5} />
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {app.timeline && app.timeline.length > 0 && (
+                      <div className="pt-2 border-t border-hairline space-y-1.5">
+                        <span className="text-[11px] font-mono text-ink-muted">Recent activity</span>
+                        {app.timeline.slice(0, 3).map((ev) => (
+                          <div key={ev.id} className="text-xs flex items-start justify-between gap-2">
+                            <span className="text-ink-secondary">{ev.text}</span>
+                            <span className="font-mono text-[11px] text-ink-muted shrink-0">
+                              {ev.actor ? `${ev.actor} · ` : ''}
+                              {new Date(ev.timestamp).toLocaleDateString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

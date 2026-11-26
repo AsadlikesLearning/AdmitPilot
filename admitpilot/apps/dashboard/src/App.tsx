@@ -51,6 +51,7 @@ export const App: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isCandidateModalOpen, setIsCandidateModalOpen] = useState(false);
+  const [candidateViewMode, setCandidateViewMode] = useState<'list' | 'detail'>('list');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [viewScope, setViewScope] = useState<'assigned' | 'all'>('all');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -176,6 +177,7 @@ export const App: React.FC = () => {
 
   const handleSelectCandidate = (c: CandidateProfile) => {
     setSelectedCandidate(c);
+    setCandidateViewMode('detail');
     loadCandidateSubresources(c.id);
   };
 
@@ -554,7 +556,12 @@ export const App: React.FC = () => {
       {/* Sidebar */}
       <Sidebar
         currentTab={currentTab}
-        onSelectTab={setCurrentTab}
+        onSelectTab={(tab) => {
+          if (tab === 'candidates') {
+            setCandidateViewMode('list');
+          }
+          setCurrentTab(tab);
+        }}
         candidateCount={scopedCandidates.length}
         applicationCount={scopedApplications.length}
         teamCount={teamMembers.length}
@@ -597,7 +604,10 @@ export const App: React.FC = () => {
             }
           }}
           storageStatus={storageStatus}
-          onOpenActiveCandidate={() => setCurrentTab('candidates')}
+          onOpenActiveCandidate={() => {
+            setCandidateViewMode('detail');
+            setCurrentTab('candidates');
+          }}
           onOpenAdminProfile={() => setCurrentTab('admin-profile')}
           onSwitchAccount={() => setIsLoginModalOpen(true)}
         />
@@ -693,25 +703,30 @@ export const App: React.FC = () => {
 
                 {currentTab === 'candidates' && (
                   <div className="space-y-6">
-                    <CandidateList
-                      candidates={filteredCandidates}
-                      selectedCandidate={selectedCandidate}
-                      members={teamMembers}
-                      countryTeams={countryTeams}
-                      onSelectCandidate={handleSelectCandidate}
-                      onNewCandidate={() => {
-                        setEditingCandidate(null);
-                        setIsCandidateModalOpen(true);
-                      }}
-                    />
-
-                    {selectedCandidate && (
+                    {candidateViewMode === 'list' || !selectedCandidate ? (
+                      <CandidateList
+                        candidates={filteredCandidates}
+                        selectedCandidate={selectedCandidate}
+                        members={teamMembers}
+                        countryTeams={countryTeams}
+                        onSelectCandidate={handleSelectCandidate}
+                        onNewCandidate={() => {
+                          setEditingCandidate(null);
+                          setIsCandidateModalOpen(true);
+                        }}
+                      />
+                    ) : (
                       <CandidateDetail
                         candidate={selectedCandidate}
                         documents={candidateDocs}
                         credentials={candidateCreds}
+                        applications={scopedApplications.filter(
+                          (a) => a.candidateId === selectedCandidate.id
+                        )}
                         members={teamMembers}
                         countryTeams={countryTeams}
+                        onBackToList={() => setCandidateViewMode('list')}
+                        onOpenApplicationsTab={() => setCurrentTab('applications')}
                         onUploadDocuments={handleUploadDocuments}
                         onReextractDocument={handleReextractDocument}
                         onDeleteDocument={handleDeleteDocument}
