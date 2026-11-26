@@ -441,13 +441,14 @@ export interface FieldMapping {
   isConfirmedFact: boolean;
 }
 
-export type AIProvider = 'gemini' | 'ollama' | 'deepseek' | 'openai_compatible';
+export type AIProvider = 'gemini' | 'openrouter' | 'deepseek' | 'ollama' | 'openai_compatible';
 
 export interface AISettings {
   provider: AIProvider;
   model: string;
   apiKey?: string;
   geminiApiKey?: string;
+  openrouterApiKey?: string;
   deepseekApiKey?: string;
   openaiApiKey?: string;
   hasConfiguredKey?: boolean;

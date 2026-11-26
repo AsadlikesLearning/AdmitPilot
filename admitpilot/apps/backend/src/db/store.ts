@@ -2174,6 +2174,7 @@ export class InMemoryStore {
           model: row.model || 'gemini-2.5-flash',
           apiKey: decryptSecret(row.api_key_encrypted),
           geminiApiKey: decryptSecret(meta.geminiApiKeyEncrypted),
+          openrouterApiKey: decryptSecret(meta.openrouterApiKeyEncrypted),
           deepseekApiKey: decryptSecret(meta.deepseekApiKeyEncrypted),
           openaiApiKey: decryptSecret(meta.openaiApiKeyEncrypted),
           endpoint: row.endpoint || undefined,
@@ -2205,6 +2206,11 @@ export class InMemoryStore {
       geminiApiKey:
         settings.geminiApiKey ??
         (targetProvider === 'gemini' && incomingKey ? incomingKey : current.geminiApiKey),
+      openrouterApiKey:
+        settings.openrouterApiKey ??
+        ((targetProvider === 'openrouter' || incomingKey?.startsWith('sk-or-')) && incomingKey
+          ? incomingKey
+          : current.openrouterApiKey),
       deepseekApiKey:
         settings.deepseekApiKey ??
         (targetProvider === 'deepseek' && incomingKey ? incomingKey : current.deepseekApiKey),
@@ -2219,6 +2225,7 @@ export class InMemoryStore {
       const pool = getPostgresPool()!;
       const meta = {
         geminiApiKeyEncrypted: encryptSecret(merged.geminiApiKey),
+        openrouterApiKeyEncrypted: encryptSecret(merged.openrouterApiKey),
         deepseekApiKeyEncrypted: encryptSecret(merged.deepseekApiKey),
         openaiApiKeyEncrypted: encryptSecret(merged.openaiApiKey),
       };

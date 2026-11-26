@@ -123,7 +123,7 @@ export const AIMatchingResponseSchema = z.object({
 });
 
 export const AISettingsSchema = z.object({
-  provider: z.enum(['gemini', 'ollama', 'deepseek', 'openai_compatible']),
+  provider: z.enum(['gemini', 'openrouter', 'ollama', 'deepseek', 'openai_compatible']),
   model: z.string().min(1),
   apiKey: z.string().optional(),
   endpoint: z.string().optional(),

@@ -18,9 +18,16 @@ interface AISettingsProps {
 
 const MODEL_PRESETS: Record<AIProvider, Array<{ id: string; label: string; note: string }>> = {
   gemini: [
-    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'Default · Fast structured JSON' },
+    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'Default · Fast structured JSON & vision' },
     { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Extended reasoning' },
     { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', note: 'High throughput' },
+  ],
+  openrouter: [
+    { id: 'openai/gpt-4o-mini', label: 'GPT-4o mini', note: 'openai/gpt-4o-mini · Fast & vision' },
+    { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'google/gemini-2.5-flash · Vision & JSON' },
+    { id: 'deepseek/deepseek-chat', label: 'DeepSeek V3', note: 'deepseek/deepseek-chat · Low cost' },
+    { id: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku', note: 'anthropic/claude-3.5-haiku' },
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (Free)', note: 'OpenRouter free tier' },
   ],
   deepseek: [
     { id: 'deepseek-chat', label: 'DeepSeek-V3', note: 'deepseek-chat · Structured JSON' },
@@ -32,8 +39,8 @@ const MODEL_PRESETS: Record<AIProvider, Array<{ id: string; label: string; note:
     { id: 'mistral', label: 'Mistral', note: 'Compact local model' },
   ],
   openai_compatible: [
-    { id: 'gpt-4o-mini', label: 'gpt-4o-mini', note: 'Low latency' },
-    { id: 'gpt-4o', label: 'gpt-4o', note: 'Full capability' },
+    { id: 'gpt-4o-mini', label: 'gpt-4o-mini', note: 'Direct OpenAI low latency' },
+    { id: 'gpt-4o', label: 'gpt-4o', note: 'Direct OpenAI full capability' },
   ],
 };
 
@@ -65,6 +72,9 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
     if (p === 'gemini') {
       setModel('gemini-2.5-flash');
       setEndpoint('');
+    } else if (p === 'openrouter') {
+      setModel('openai/gpt-4o-mini');
+      setEndpoint('https://openrouter.ai/api/v1');
     } else if (p === 'deepseek') {
       setModel('deepseek-chat');
       setEndpoint('https://api.deepseek.com/v1');
@@ -74,6 +84,18 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
     } else if (p === 'openai_compatible') {
       setModel('gpt-4o-mini');
       setEndpoint('https://api.openai.com/v1');
+    }
+  };
+
+  const handleApiKeyChange = (val: string) => {
+    setApiKey(val);
+    // Automatically switch OpenRouter keys (sk-or-v1-...) to OpenRouter endpoint & vendor-prefixed model
+    if (val.trim().startsWith('sk-or-') && provider === 'openai_compatible') {
+      setProvider('openrouter');
+      setEndpoint('https://openrouter.ai/api/v1');
+      if (!model.includes('/')) {
+        setModel('openai/gpt-4o-mini');
+      }
     }
   };
 
@@ -135,6 +157,15 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
       ? 'local server'
       : 'key required';
 
+  const envVarName =
+    provider === 'gemini'
+      ? 'GEMINI_API_KEY'
+      : provider === 'openrouter'
+      ? 'OPENROUTER_API_KEY'
+      : provider === 'deepseek'
+      ? 'DEEPSEEK_API_KEY'
+      : 'OPENAI_API_KEY';
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -144,7 +175,7 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
             Model providers
           </h1>
           <p className="text-sm text-ink-secondary mt-1.5">
-            Configure Google Gemini, DeepSeek, local Ollama, or OpenAI-compatible inference for ambiguous field matching and portal analysis
+            Configure Google Gemini, OpenRouter, DeepSeek, local Ollama, or custom OpenAI-compatible gateways
           </p>
         </div>
 
@@ -157,20 +188,26 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
         </div>
       </div>
 
-      {/* 4 Provider Selection Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 5 Provider Selection Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         {[
           {
             id: 'gemini' as AIProvider,
             name: 'Google Gemini',
-            meta: 'Free & Pro tiers',
-            desc: 'Gemini 2.5 Flash and Pro with structured JSON output',
+            meta: 'Direct API',
+            desc: 'Gemini 2.5 Flash & Pro with native vision and JSON',
+          },
+          {
+            id: 'openrouter' as AIProvider,
+            name: 'OpenRouter',
+            meta: 'sk-or-v1 keys',
+            desc: 'Unified router for GPT-4o, Gemini, Claude, DeepSeek & free models',
           },
           {
             id: 'deepseek' as AIProvider,
             name: 'DeepSeek API',
-            meta: 'V3 & R1 models',
-            desc: 'DeepSeek-V3 chat and DeepSeek-R1 reasoning endpoints',
+            meta: 'V3 & R1',
+            desc: 'Direct DeepSeek-V3 chat and DeepSeek-R1 reasoning',
           },
           {
             id: 'ollama' as AIProvider,
@@ -180,9 +217,9 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
           },
           {
             id: 'openai_compatible' as AIProvider,
-            name: 'OpenAI-compatible',
-            meta: 'Custom gateway',
-            desc: 'OpenAI, OpenRouter, Groq, vLLM, or internal proxies',
+            name: 'OpenAI / Custom',
+            meta: 'Custom URL',
+            desc: 'Direct OpenAI platform, Groq, vLLM, or internal proxies',
           },
         ].map((p) => {
           const selected = provider === p.id;
@@ -191,7 +228,7 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
               key={p.id}
               type="button"
               onClick={() => handleProviderChange(p.id)}
-              className={`p-5 rounded-xl border text-left transition-colors duration-150 ease-quart flex flex-col justify-between ${
+              className={`p-4 rounded-xl border text-left transition-colors duration-150 ease-quart flex flex-col justify-between ${
                 selected
                   ? 'bg-surface-raised border-brass shadow-[inset_0_1px_0_rgba(212,168,83,0.16)]'
                   : 'bg-surface-card border-hairline hover:border-hairline-strong'
@@ -201,8 +238,8 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
                 <span className="font-mono text-xs text-ink-muted">{p.meta}</span>
                 {selected && <span className="w-2 h-2 rounded-full bg-brass" />}
               </div>
-              <div className="mt-4">
-                <h3 className="text-base font-medium text-ink-primary">{p.name}</h3>
+              <div className="mt-3.5">
+                <h3 className="text-sm font-medium text-ink-primary">{p.name}</h3>
                 <p className="text-xs text-ink-secondary mt-1 leading-relaxed">{p.desc}</p>
               </div>
             </button>
@@ -219,7 +256,7 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
         <div>
           <label className="block text-xs text-ink-secondary mb-2">Preset models</label>
           <div className="flex flex-wrap gap-2.5">
-            {MODEL_PRESETS[provider].map((preset) => {
+            {(MODEL_PRESETS[provider] || MODEL_PRESETS.gemini).map((preset) => {
               const active = model === preset.id;
               return (
                 <button
@@ -247,7 +284,7 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
               required
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="gemini-2.5-flash"
+              placeholder={provider === 'openrouter' ? 'openai/gpt-4o-mini' : 'gemini-2.5-flash'}
               className="field-input font-mono"
             />
             <p className="text-xs text-ink-muted mt-1.5">
@@ -269,6 +306,17 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
                   className="text-xs text-brass hover:underline inline-flex items-center gap-1"
                 >
                   <span>Google AI Studio</span>
+                  <ExternalLink className="w-4 h-4" strokeWidth={1.5} />
+                </a>
+              )}
+              {provider === 'openrouter' && (
+                <a
+                  href="https://openrouter.ai/keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-brass hover:underline inline-flex items-center gap-1"
+                >
+                  <span>OpenRouter keys</span>
                   <ExternalLink className="w-4 h-4" strokeWidth={1.5} />
                 </a>
               )}
@@ -296,26 +344,26 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
               <input
                 type="password"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => handleApiKeyChange(e.target.value)}
                 placeholder={
                   hasSavedKeyForSelected
-                    ? `Key active (${settings.keySource === 'env' ? 'from .env' : 'saved'}) — enter new key to replace`
-                    : `Paste ${provider === 'gemini' ? 'AIza...' : 'sk-...'} key or set in admitpilot/.env`
+                    ? `Key active (${settings.keySource === 'env' ? 'from .env' : 'saved in Supabase'}) — enter new key to replace`
+                    : `Paste ${
+                        provider === 'gemini'
+                          ? 'AIza...'
+                          : provider === 'openrouter'
+                          ? 'sk-or-v1-...'
+                          : 'sk-...'
+                      } key`
                 }
                 className="field-input font-mono"
               />
             )}
             {provider !== 'ollama' && (
               <p className="text-xs text-ink-muted mt-1.5">
-                Stored server-side or read from{' '}
-                <code className="font-mono text-ink-secondary">
-                  {provider === 'gemini'
-                    ? 'GEMINI_API_KEY'
-                    : provider === 'deepseek'
-                    ? 'DEEPSEEK_API_KEY'
-                    : 'OPENAI_API_KEY'}
-                </code>{' '}
-                in <code className="font-mono text-ink-secondary">admitpilot/.env</code>
+                Encrypted in Supabase PostgreSQL or read from{' '}
+                <code className="font-mono text-ink-secondary">{envVarName}</code> in{' '}
+                <code className="font-mono text-ink-secondary">admitpilot/.env</code>
               </p>
             )}
           </div>
@@ -328,7 +376,13 @@ export const AISettingsView: React.FC<AISettingsProps> = ({ settings, onSave }) 
               <input
                 value={endpoint}
                 onChange={(e) => setEndpoint(e.target.value)}
-                placeholder={provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1'}
+                placeholder={
+                  provider === 'openrouter'
+                    ? 'https://openrouter.ai/api/v1'
+                    : provider === 'deepseek'
+                    ? 'https://api.deepseek.com/v1'
+                    : 'https://api.openai.com/v1'
+                }
                 className="field-input font-mono"
               />
             </div>
