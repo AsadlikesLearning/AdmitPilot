@@ -145,6 +145,14 @@
     outline: none;
     border-color: rgb(var(--brass));
   }
+
+  select,
+  select.field-input {
+    line-height: normal;
+    padding-top: 0;
+    padding-bottom: 0;
+    vertical-align: middle;
+  }
 }
 
 @keyframes panelEnter {
