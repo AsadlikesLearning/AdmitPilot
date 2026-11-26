@@ -702,10 +702,6 @@ export const App: React.FC = () => {
           onChangeViewScope={setViewScope}
           assignedCount={assignedCandidates.length}
           totalCount={candidates.length}
-          onOpenActiveCandidate={() => {
-            setCandidateViewMode('detail');
-            setCurrentTab('candidates');
-          }}
           onOpenAdminProfile={() => setCurrentTab('admin-profile')}
           onOpenAgencySettings={() => setCurrentTab('agency-settings')}
           onSwitchAccount={() => setIsLoginModalOpen(true)}
@@ -833,6 +829,11 @@ export const App: React.FC = () => {
                 {currentTab === 'testing' && selectedCandidate && (
                   <TestFormRunner
                     candidate={selectedCandidate}
+                    candidates={scopedCandidates}
+                    onSelectCandidate={(cand) => {
+                      setSelectedCandidate(cand);
+                      loadCandidateSubresources(cand.id);
+                    }}
                     onMatchFields={api.matchFields}
                   />
                 )}

@@ -6,10 +6,17 @@ import { api } from '../api';
 
 interface TestFormRunnerProps {
   candidate: CandidateProfile;
+  candidates?: CandidateProfile[];
+  onSelectCandidate?: (candidate: CandidateProfile) => void;
   onMatchFields: (candidateId: string, fields: FormField[]) => Promise<any>;
 }
 
-export const TestFormRunner: React.FC<TestFormRunnerProps> = ({ candidate, onMatchFields }) => {
+export const TestFormRunner: React.FC<TestFormRunnerProps> = ({
+  candidate,
+  candidates = [],
+  onSelectCandidate,
+  onMatchFields,
+}) => {
   const [givenNames, setGivenNames] = useState('');
   const [familyName, setFamilyName] = useState('');
   const [email, setEmail] = useState('');
@@ -253,6 +260,24 @@ export const TestFormRunner: React.FC<TestFormRunnerProps> = ({ candidate, onMat
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {candidates.length > 1 && onSelectCandidate && (
+            <select
+              value={candidate.id}
+              onChange={(e) => {
+                const next = candidates.find((c) => c.id === e.target.value);
+                if (next) onSelectCandidate(next);
+              }}
+              aria-label="Select candidate for portal sandbox"
+              className="field-input h-9 w-auto text-xs"
+            >
+              {candidates.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.personal.legalGivenName} {c.personal.familyName}
+                </option>
+              ))}
+            </select>
+          )}
+
           <button type="button" onClick={handleReset} className="btn-secondary">
             <RotateCcw className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
             <span>Reset</span>
@@ -265,7 +290,7 @@ export const TestFormRunner: React.FC<TestFormRunnerProps> = ({ candidate, onMat
             className={mappings.length > 0 ? 'btn-secondary' : 'btn-primary'}
           >
             <ScanSearch
-              className={`w-4 h-4 ${mappings.length > 0 ? 'text-ink-muted' : 'text-[#141415]'}`}
+              className={`w-4 h-4 ${mappings.length > 0 ? 'text-ink-muted' : ''}`}
               strokeWidth={1.5}
             />
             <span>{scanning ? 'Scanning fields...' : 'Scan & match portal'}</span>
@@ -278,7 +303,7 @@ export const TestFormRunner: React.FC<TestFormRunnerProps> = ({ candidate, onMat
               onClick={handleApplyAutofill}
               className="btn-primary"
             >
-              <Play className="w-4 h-4 text-[#141415]" strokeWidth={1.5} />
+              <Play className="w-4 h-4" strokeWidth={1.5} />
               <span className="tabular-nums">
                 {attaching
                   ? 'Attaching files...'

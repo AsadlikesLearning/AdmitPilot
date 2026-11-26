@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Search,
-  FolderOpen,
   ArrowLeftRight,
   Sun,
   Moon,
@@ -41,7 +40,6 @@ interface HeaderProps {
   onChangeViewScope?: (scope: 'assigned' | 'all') => void;
   assignedCount?: number;
   totalCount?: number;
-  onOpenActiveCandidate?: () => void;
   onOpenAdminProfile?: () => void;
   onOpenAgencySettings?: () => void;
   onSwitchAccount?: () => void;
@@ -95,7 +93,6 @@ export const Header: React.FC<HeaderProps> = ({
   onChangeViewScope,
   assignedCount = 0,
   totalCount = 0,
-  onOpenActiveCandidate,
   onOpenAdminProfile,
   onOpenAgencySettings,
   onSwitchAccount,
@@ -235,18 +232,6 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             )}
           </div>
-        )}
-
-        {activeCandidateName && (
-          <button
-            type="button"
-            onClick={onOpenActiveCandidate}
-            title={`Open active dossier: ${activeCandidateName}`}
-            className="hidden sm:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-surface-card border border-hairline hover:border-hairline-strong text-xs text-ink-secondary transition-colors duration-150 ease-quart max-w-[200px]"
-          >
-            <FolderOpen className="w-3.5 h-3.5 text-brass shrink-0" strokeWidth={1.5} />
-            <span className="text-ink-primary font-medium truncate">{activeCandidateName}</span>
-          </button>
         )}
 
         <div className="h-4 w-px bg-hairline mx-0.5 hidden sm:block" />
