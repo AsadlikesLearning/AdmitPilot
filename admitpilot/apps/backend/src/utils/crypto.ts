@@ -98,3 +98,31 @@ export function maskSecret(secret?: string | null): string | undefined {
   if (secret.length <= 4) return '••••••••';
   return `${'•'.repeat(Math.min(10, Math.max(6, secret.length - 2)))}${secret.slice(-2)}`;
 }
+
+/**
+ * Hashes a user login password using Node crypto.scryptSync with a 16-byte random salt.
+ */
+export function hashPassword(plainText: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(plainText, salt, 64).toString('hex');
+  return `scrypt:${salt}:${derived}`;
+}
+
+/**
+ * Constant-time verification of a user login password against a stored scrypt hash.
+ */
+export function verifyPassword(plainText: string, storedHash?: string | null): boolean {
+  if (!storedHash || !plainText) return false;
+  if (!storedHash.startsWith('scrypt:')) return false;
+  const parts = storedHash.split(':');
+  if (parts.length !== 3) return false;
+  const [, salt, expectedHex] = parts;
+  try {
+    const derived = crypto.scryptSync(plainText, salt, 64);
+    const expected = Buffer.from(expectedHex, 'hex');
+    if (derived.length !== expected.length) return false;
+    return crypto.timingSafeEqual(derived, expected);
+  } catch {
+    return false;
+  }
+}

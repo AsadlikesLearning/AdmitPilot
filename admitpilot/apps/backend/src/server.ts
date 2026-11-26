@@ -83,6 +83,36 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
+// Real multi-user login endpoint (verifies email + scrypt password in Supabase user_profiles)
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    const user = await store.authenticateUser(String(email), String(password));
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    if (user.status === 'suspended') {
+      return res.status(403).json({ error: 'This team account has been suspended by the agency owner' });
+    }
+    const token = jwt.sign(
+      {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        organization_id: user.organizationId,
+      },
+      JWT_SECRET,
+      { expiresIn: '12h' }
+    );
+    res.json({ token, user });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Local development session bootstrap (disabled in production)
 app.post('/api/auth/dev-session', (_req, res) => {
   if (process.env.NODE_ENV === 'production') {
@@ -1211,6 +1241,20 @@ app.put('/api/team/members/:id', async (req, res) => {
       id: existing.id,
     });
     res.json(updated);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/team/members/:id/credentials', async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    const ok = await store.setMemberPassword(req.params.id as string, String(password));
+    if (!ok) return res.status(404).json({ error: 'Team member not found' });
+    res.json({ success: true });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }

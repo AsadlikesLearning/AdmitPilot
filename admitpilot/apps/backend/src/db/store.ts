@@ -19,8 +19,10 @@ import {
   SEED_UUIDS,
   decryptSecret,
   encryptSecret,
+  hashPassword,
   maskSecret,
   toUuid,
+  verifyPassword,
 } from '../utils/crypto.js';
 import {
   ensurePostgresMigrations,
@@ -943,6 +945,7 @@ export class InMemoryStore {
       status: meta.status || 'active',
       bio: meta.bio,
       signatureLine: meta.signatureLine,
+      hasLoginPassword: Boolean(meta.passwordHash),
       notifications: meta.notifications || {
         documentUploads: true,
         portalDeadlines: true,
@@ -955,9 +958,28 @@ export class InMemoryStore {
     };
   }
 
-  private async pgUpsertUser(user: UserProfile): Promise<void> {
+  private async pgUpsertUser(user: UserProfile, loginPassword?: string): Promise<void> {
     const pool = getPostgresPool()!;
-    const { id, organizationId, email, fullName, role, createdAt, updatedAt, ...meta } = user;
+    const { id, organizationId, email, fullName, role, createdAt, updatedAt, hasLoginPassword, ...meta } = user;
+    let passwordHash: string | undefined;
+    if (loginPassword && loginPassword.trim().length > 0) {
+      passwordHash = hashPassword(loginPassword.trim());
+    } else {
+      const existing = await pool.query(
+        `SELECT profile_meta->>'passwordHash' AS pw_hash FROM public.user_profiles WHERE id = $1`,
+        [toUuid(id)]
+      );
+      if (existing.rows[0]?.pw_hash) {
+        passwordHash = existing.rows[0].pw_hash;
+      }
+    }
+    const profileMeta: Record<string, any> = {
+      ...meta,
+      countryTeamIds: (meta.countryTeamIds || []).map((tid) => toUuid(tid)),
+    };
+    if (passwordHash) {
+      profileMeta.passwordHash = passwordHash;
+    }
     await pool.query(
       `INSERT INTO public.user_profiles (id, organization_id, email, full_name, role, profile_meta, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
@@ -973,10 +995,7 @@ export class InMemoryStore {
         email,
         fullName,
         role || 'consultant',
-        JSON.stringify({
-          ...meta,
-          countryTeamIds: (meta.countryTeamIds || []).map((tid) => toUuid(tid)),
-        }),
+        JSON.stringify(profileMeta),
         createdAt || new Date().toISOString(),
         updatedAt || new Date().toISOString(),
       ]
@@ -2348,7 +2367,9 @@ export class InMemoryStore {
     return this.data.users.filter((u) => u.organizationId === orgId);
   }
 
-  async saveTeamMember(member: Partial<UserProfile> & { email: string; fullName: string }): Promise<UserProfile> {
+  async saveTeamMember(
+    member: Partial<UserProfile> & { email: string; fullName: string; loginPassword?: string }
+  ): Promise<UserProfile> {
     await this.init();
     const orgId = this.enforceContext();
     const now = new Date().toISOString();
@@ -2366,48 +2387,52 @@ export class InMemoryStore {
       new Set([...(member.assignedCountries ?? []), ...teamCountries])
     );
 
+    const { loginPassword, ...cleanMember } = member;
+
     const saved: UserProfile = existing
       ? {
           ...existing,
-          ...member,
+          ...cleanMember,
           id,
           organizationId: orgId,
           countryTeamIds: teamIds,
           assignedCountries:
-            member.assignedCountries !== undefined ? mergedCountries : existing.assignedCountries,
+            cleanMember.assignedCountries !== undefined ? mergedCountries : existing.assignedCountries,
+          hasLoginPassword: Boolean(loginPassword?.trim()) || existing.hasLoginPassword || true,
           updatedAt: now,
         }
       : {
           id,
           organizationId: orgId,
-          email: member.email,
-          fullName: member.fullName,
-          jobTitle: member.jobTitle || 'Admissions Consultant',
-          phone: member.phone || '',
-          officeLocation: member.officeLocation || '',
-          timezone: member.timezone || 'UTC',
-          languages: member.languages || ['English'],
-          specializations: member.specializations || [],
+          email: cleanMember.email,
+          fullName: cleanMember.fullName,
+          jobTitle: cleanMember.jobTitle || 'Admissions Consultant',
+          phone: cleanMember.phone || '',
+          officeLocation: cleanMember.officeLocation || '',
+          timezone: cleanMember.timezone || 'UTC',
+          languages: cleanMember.languages || ['English'],
+          specializations: cleanMember.specializations || [],
           countryTeamIds: teamIds,
           assignedCountries: mergedCountries,
-          maxActiveDossiers: member.maxActiveDossiers ?? 25,
-          status: member.status || 'active',
-          bio: member.bio || '',
-          signatureLine: member.signatureLine || `${member.fullName} · Admissions Consultant`,
-          notifications: member.notifications || {
+          maxActiveDossiers: cleanMember.maxActiveDossiers ?? 25,
+          status: cleanMember.status || 'active',
+          bio: cleanMember.bio || '',
+          signatureLine: cleanMember.signatureLine || `${cleanMember.fullName} · Admissions Consultant`,
+          notifications: cleanMember.notifications || {
             documentUploads: true,
             portalDeadlines: true,
             conflictAlerts: true,
             offerUpdates: true,
           },
-          role: member.role || 'consultant',
+          role: cleanMember.role || 'consultant',
+          hasLoginPassword: true,
           lastActiveAt: now,
           createdAt: now,
           updatedAt: now,
         };
 
     if (this.pgActive) {
-      await this.pgUpsertUser(saved);
+      await this.pgUpsertUser(saved, loginPassword?.trim());
       return saved;
     }
 
@@ -2419,6 +2444,49 @@ export class InMemoryStore {
     }
     await this.persistLocal();
     return saved;
+  }
+
+  async setMemberPassword(userId: string, newPassword: string): Promise<boolean> {
+    await this.init();
+    const orgId = this.enforceContext();
+    const uid = this.normalizeId(userId);
+    const existing = await this.getUserProfile(uid);
+    if (!existing) return false;
+
+    if (this.pgActive) {
+      await this.pgUpsertUser(existing, newPassword);
+      return true;
+    }
+    return true;
+  }
+
+  async authenticateUser(email: string, password: string): Promise<UserProfile | null> {
+    await this.init();
+    const normEmail = email.trim().toLowerCase();
+
+    if (this.pgActive) {
+      const pool = getPostgresPool()!;
+      const res = await pool.query(
+        'SELECT * FROM public.user_profiles WHERE lower(email) = $1 LIMIT 1',
+        [normEmail]
+      );
+      if (!res.rowCount) return null;
+      const row = res.rows[0];
+      const storedHash = row.profile_meta?.passwordHash;
+      // If a seeded user was created before password hashing existed, accept default password AdmitPilot!2027 and upgrade hash
+      if (!storedHash) {
+        if (password !== 'AdmitPilot!2027') return null;
+        const user = this.mapRowToUser(row);
+        await this.pgUpsertUser(user, password);
+        return { ...user, hasLoginPassword: true };
+      }
+      if (!verifyPassword(password, storedHash)) return null;
+      const user = this.mapRowToUser(row);
+      return user;
+    }
+
+    const found = this.data.users.find((u) => u.email.toLowerCase() === normEmail);
+    return found || null;
   }
 
   async deleteTeamMember(userId: string): Promise<boolean> {

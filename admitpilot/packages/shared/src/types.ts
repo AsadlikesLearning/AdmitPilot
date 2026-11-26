@@ -57,6 +57,7 @@ export interface UserProfile {
   signatureLine?: string;
   notifications?: UserNotificationPrefs;
   role: UserRole;
+  hasLoginPassword?: boolean;
   lastActiveAt?: string;
   createdAt: string;
   updatedAt?: string;

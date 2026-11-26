@@ -9,8 +9,13 @@ import {
   Globe,
   Users,
   SlidersHorizontal,
+  KeyRound,
+  FolderOpen,
+  ClipboardList,
+  CheckCircle2,
 } from 'lucide-react';
 import {
+  ApplicationRecord,
   CandidateProfile,
   CountryTeam,
   MemberStatus,
@@ -21,12 +26,16 @@ import { VerificationStamp, StampTone } from './ui/Primitives';
 
 interface OrganizationViewProps {
   candidates: CandidateProfile[];
+  applications?: ApplicationRecord[];
   members: UserProfile[];
   countryTeams: CountryTeam[];
   operatingCountries?: string[];
   currentUserId?: string;
-  onCreateMember: (member: Partial<UserProfile> & { email: string; fullName: string }) => Promise<void>;
+  onCreateMember: (
+    member: Partial<UserProfile> & { email: string; fullName: string; loginPassword?: string }
+  ) => Promise<void>;
   onUpdateMember: (id: string, updates: Partial<UserProfile>) => Promise<void>;
+  onSetMemberPassword?: (userId: string, password: string) => Promise<void>;
   onDeleteMember: (id: string) => Promise<void>;
   onCreateCountryTeam: (
     team: Partial<CountryTeam> & { name: string; code: string; countries: string[]; memberIds?: string[] }
@@ -90,12 +99,14 @@ function suggestCode(name: string): string {
 
 export const OrganizationView: React.FC<OrganizationViewProps> = ({
   candidates,
+  applications = [],
   members,
   countryTeams,
   operatingCountries = [],
   currentUserId,
   onCreateMember,
   onUpdateMember,
+  onSetMemberPassword,
   onDeleteMember,
   onCreateCountryTeam,
   onUpdateCountryTeam,
@@ -121,6 +132,13 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
   const [mOffice, setMOffice] = useState('');
   const [mMaxDossiers, setMMaxDossiers] = useState(25);
   const [mTeamIds, setMTeamIds] = useState<string[]>([]);
+  const [mPassword, setMPassword] = useState('');
+
+  // Teammate Profile & Workload Drawer state
+  const [inspectedMember, setInspectedMember] = useState<UserProfile | null>(null);
+  const [drawerPassword, setDrawerPassword] = useState('');
+  const [drawerPwBusy, setDrawerPwBusy] = useState(false);
+  const [drawerPwMsg, setDrawerPwMsg] = useState<string | null>(null);
 
   // Country Desk modal state
   const [isDeskModalOpen, setIsDeskModalOpen] = useState(false);
@@ -152,6 +170,7 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
       setMOffice(member.officeLocation || '');
       setMMaxDossiers(member.maxActiveDossiers ?? 25);
       setMTeamIds(member.countryTeamIds || []);
+      setMPassword('');
     } else {
       setEditingMember(null);
       setMFullName('');
@@ -163,6 +182,7 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
       setMOffice('');
       setMMaxDossiers(25);
       setMTeamIds(countryTeams[0] ? [countryTeams[0].id] : []);
+      setMPassword('');
     }
     setIsMemberModalOpen(true);
   };
@@ -183,9 +203,16 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
 
     if (editingMember) {
       await onUpdateMember(editingMember.id, payload);
+      if (mPassword.trim().length >= 6 && onSetMemberPassword) {
+        await onSetMemberPassword(editingMember.id, mPassword.trim());
+      }
     } else {
-      await onCreateMember(payload);
+      await onCreateMember({
+        ...payload,
+        ...(mPassword.trim().length >= 6 ? { loginPassword: mPassword.trim() } : {}),
+      });
     }
+    setMPassword('');
     setIsMemberModalOpen(false);
   };
 
@@ -532,18 +559,26 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
                 return (
                   <tr key={member.id} className="hover:bg-surface-deep/50">
                     <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInspectedMember(member);
+                          setDrawerPassword('');
+                          setDrawerPwMsg(null);
+                        }}
+                        className="flex items-center gap-3 text-left group"
+                      >
                         <span className="w-8 h-8 rounded-md bg-surface-deep border border-hairline font-mono text-xs text-brass flex items-center justify-center shrink-0">
                           {initialsOf(member.fullName)}
                         </span>
                         <div>
-                          <p className="text-sm font-medium text-ink-primary">
+                          <p className="text-sm font-medium text-ink-primary group-hover:text-brass transition-colors">
                             {member.fullName}
                             {isSelf && <span className="text-xs text-brass ml-1.5">(You)</span>}
                           </p>
                           <p className="text-ink-secondary">{member.email}</p>
                         </div>
-                      </div>
+                      </button>
                     </td>
 
                     <td className="py-3.5 px-4 space-y-1">
@@ -581,6 +616,19 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
 
                     <td className="py-3.5 px-4 text-right">
                       <div className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInspectedMember(member);
+                            setDrawerPassword('');
+                            setDrawerPwMsg(null);
+                          }}
+                          className="h-8 px-2.5 rounded-lg bg-surface-deep border border-hairline hover:border-hairline-strong text-ink-secondary hover:text-ink-primary inline-flex items-center gap-1.5 text-xs"
+                          title="Inspect assigned students, admissions process & login credentials"
+                        >
+                          <KeyRound className="w-3.5 h-3.5 text-brass" strokeWidth={1.5} />
+                          <span className="hidden sm:inline">Profile & workload</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => openMemberModal(member)}
@@ -890,6 +938,24 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
               </div>
 
               <div>
+                <label className="block text-xs text-ink-secondary mb-1.5">
+                  {editingMember ? 'Reset login password (optional)' : 'Login password (optional)'}
+                </label>
+                <input
+                  type="password"
+                  minLength={6}
+                  value={mPassword}
+                  onChange={(e) => setMPassword(e.target.value)}
+                  placeholder={
+                    editingMember
+                      ? 'Leave blank to keep current password (min 6 chars)'
+                      : 'Min 6 characters (defaults to AdmitPilot!2027 if blank)'
+                  }
+                  className="field-input"
+                />
+              </div>
+
+              <div>
                 <label className="block text-xs text-ink-secondary mb-2">Assign to country desks</label>
                 <div className="flex flex-wrap gap-1.5">
                   {countryTeams.map((desk) => {
@@ -929,6 +995,272 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Drawer: Teammate Profile, Login Credentials & Assigned Workload */}
+      {inspectedMember && (() => {
+        const liveMember = members.find((m) => m.id === inspectedMember.id) || inspectedMember;
+        const memberTeamIds = new Set(liveMember.countryTeamIds || []);
+        const memberDesks = countryTeams.filter((d) => memberTeamIds.has(d.id));
+        const memberStudents = activeCandidates.filter(
+          (c) =>
+            c.assignedConsultantId === liveMember.id ||
+            (!c.assignedConsultantId &&
+              c.countryTeamId &&
+              memberTeamIds.has(c.countryTeamId))
+        );
+        const memberStudentIds = new Set(memberStudents.map((s) => s.id));
+        const memberApps = applications.filter(
+          (a) => a.assignedConsultantId === liveMember.id || memberStudentIds.has(a.candidateId)
+        );
+        const statusInfo = STATUS_META[liveMember.status || 'active'] || STATUS_META.active;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/75 flex justify-end">
+            <div className="bg-surface-card border-l border-hairline-strong w-full max-w-xl h-full flex flex-col">
+              <div className="h-14 px-6 border-b border-hairline flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="w-8 h-8 rounded-md bg-surface-deep border border-hairline font-mono text-xs text-brass flex items-center justify-center shrink-0">
+                    {initialsOf(liveMember.fullName)}
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-medium text-ink-primary truncate">
+                      {liveMember.fullName}
+                    </h3>
+                    <p className="text-xs text-ink-muted truncate">
+                      {ROLE_LABELS[liveMember.role]} · {liveMember.email}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectedMember(null);
+                      openMemberModal(liveMember);
+                    }}
+                    className="btn-secondary h-8 px-2.5 text-xs"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectedMember(null)}
+                    className="h-8 w-8 rounded-lg text-ink-muted hover:text-ink-primary hover:bg-surface-raised inline-flex items-center justify-center"
+                  >
+                    <X className="w-4 h-4" strokeWidth={1.5} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 text-sm">
+                {/* Profile & Desks */}
+                <div className="p-4 rounded-xl bg-surface-deep border border-hairline space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-ink-secondary">
+                      Profile & country desks
+                    </span>
+                    <VerificationStamp tone={statusInfo.tone} label={statusInfo.label} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-ink-muted block">Job title</span>
+                      <span className="text-ink-primary">
+                        {liveMember.jobTitle || ROLE_LABELS[liveMember.role]}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-ink-muted block">Branch / office</span>
+                      <span className="text-ink-primary">
+                        {liveMember.officeLocation || 'Main office'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {memberDesks.length > 0 ? (
+                      memberDesks.map((d) => (
+                        <span
+                          key={d.id}
+                          className="px-2 py-0.5 rounded bg-surface-raised border border-brass-border text-xs text-ink-primary inline-flex items-center gap-1.5"
+                        >
+                          <span className="font-mono text-brass">{d.code}</span>
+                          <span>{d.name}</span>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-ink-muted">No country desks assigned</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Login Credentials */}
+                <div className="p-4 rounded-xl bg-surface-deep border border-hairline space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="w-4 h-4 text-brass" strokeWidth={1.5} />
+                      <span className="text-xs font-medium text-ink-primary">
+                        Login credentials
+                      </span>
+                    </div>
+                    <VerificationStamp
+                      tone={liveMember.hasLoginPassword ? 'positive' : 'brass'}
+                      label={liveMember.hasLoginPassword ? 'custom password' : 'default password'}
+                    />
+                  </div>
+                  <div className="text-xs text-ink-secondary">
+                    Sign-in email: <span className="font-mono text-ink-primary">{liveMember.email}</span>
+                  </div>
+                  {onSetMemberPassword && (
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (drawerPassword.trim().length < 6) return;
+                        setDrawerPwBusy(true);
+                        setDrawerPwMsg(null);
+                        try {
+                          await onSetMemberPassword(liveMember.id, drawerPassword.trim());
+                          setDrawerPassword('');
+                          setDrawerPwMsg('Login password updated.');
+                        } finally {
+                          setDrawerPwBusy(false);
+                        }
+                      }}
+                      className="flex items-center gap-2 pt-1"
+                    >
+                      <input
+                        type="password"
+                        minLength={6}
+                        required
+                        value={drawerPassword}
+                        onChange={(e) => setDrawerPassword(e.target.value)}
+                        placeholder="Set new password (min 6 chars)"
+                        className="field-input h-8 text-xs flex-1"
+                      />
+                      <button
+                        type="submit"
+                        disabled={drawerPwBusy}
+                        className="btn-primary h-8 px-3 text-xs shrink-0"
+                      >
+                        {drawerPwBusy ? 'Saving...' : 'Update password'}
+                      </button>
+                    </form>
+                  )}
+                  {drawerPwMsg && (
+                    <p className="text-xs text-tone-positive flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      <span>{drawerPwMsg}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Assigned Students */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
+                      <h4 className="text-xs font-medium text-ink-primary">
+                        Assigned students ({memberStudents.length})
+                      </h4>
+                    </div>
+                  </div>
+                  {memberStudents.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-surface-deep border border-hairline text-xs text-ink-muted">
+                      No student dossiers assigned to {liveMember.fullName} yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {memberStudents.map((student) => (
+                        <button
+                          key={student.id}
+                          type="button"
+                          onClick={() => {
+                            setInspectedMember(null);
+                            onSelectCandidateDossier?.(student);
+                          }}
+                          className="w-full p-3 rounded-xl bg-surface-deep border border-hairline hover:border-hairline-strong text-left flex items-center justify-between gap-3 transition-colors"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-ink-primary truncate">
+                              {student.personal.legalGivenName} {student.personal.familyName}
+                            </p>
+                            <p className="text-[11px] text-ink-muted truncate">
+                              {(student.targetCountries || []).join(', ') || student.personal.nationality} ·{' '}
+                              {student.assignedConsultantId === liveMember.id
+                                ? 'Direct owner'
+                                : 'Via country desk'}
+                            </p>
+                          </div>
+                          <span className="font-mono text-xs text-brass shrink-0">
+                            {student.status}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Admissions Process (Applications) */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="w-4 h-4 text-ink-muted" strokeWidth={1.5} />
+                    <h4 className="text-xs font-medium text-ink-primary">
+                      Admissions process ({memberApps.length} applications)
+                    </h4>
+                  </div>
+                  {memberApps.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-surface-deep border border-hairline text-xs text-ink-muted">
+                      No active university applications under {liveMember.fullName} yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {memberApps.map((app) => {
+                        const student = candidates.find((c) => c.id === app.candidateId);
+                        return (
+                          <div
+                            key={app.id}
+                            className="p-3 rounded-xl bg-surface-deep border border-hairline flex items-center justify-between gap-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-ink-primary truncate">
+                                {app.institutionName}
+                              </p>
+                              <p className="text-[11px] text-ink-muted truncate">
+                                {app.programName}
+                                {student
+                                  ? ` · ${student.personal.legalGivenName} ${student.personal.familyName}`
+                                  : ''}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0 space-y-1">
+                              <VerificationStamp
+                                tone={
+                                  app.status === 'unconditional_offer' ||
+                                  app.status === 'conditional_offer' ||
+                                  app.status === 'enrolled'
+                                    ? 'positive'
+                                    : app.status === 'rejected'
+                                      ? 'negative'
+                                      : 'brass'
+                                }
+                                label={app.status.replace(/_/g, ' ')}
+                              />
+                              {app.deadline && (
+                                <p className="text-[11px] font-mono text-ink-muted">
+                                  Due {app.deadline}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

@@ -456,6 +456,30 @@ export const api = {
     return res.json();
   },
 
+  // Auth & Session
+  login: async (
+    email: string,
+    password: string
+  ): Promise<{ token: string; user: UserProfile }> => {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Invalid email or password');
+    }
+    if (data?.token) {
+      localStorage.setItem('supabase-auth-token', JSON.stringify({ token: data.token }));
+    }
+    return data;
+  },
+
+  logout: (): void => {
+    localStorage.removeItem('supabase-auth-token');
+  },
+
   // Teammates & Country Desks
   getTeamMembers: async (): Promise<UserProfile[]> => {
     const res = await authFetch(`${API_BASE}/team/members`);
@@ -464,7 +488,7 @@ export const api = {
   },
 
   createTeamMember: async (
-    member: Partial<UserProfile> & { email: string; fullName: string }
+    member: Partial<UserProfile> & { email: string; fullName: string; loginPassword?: string }
   ): Promise<UserProfile> => {
     const res = await authFetch(`${API_BASE}/team/members`, {
       method: 'POST',
@@ -473,6 +497,21 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to create team member');
+    }
+    return res.json();
+  },
+
+  setMemberPassword: async (
+    userId: string,
+    password: string
+  ): Promise<{ success: boolean }> => {
+    const res = await authFetch(`${API_BASE}/team/members/${userId}/credentials`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update login password');
     }
     return res.json();
   },

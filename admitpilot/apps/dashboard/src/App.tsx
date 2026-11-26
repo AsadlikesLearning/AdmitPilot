@@ -11,6 +11,7 @@ import { AISettingsView } from './components/AISettingsView';
 import { TestFormRunner } from './components/TestFormRunner';
 import { OrganizationView } from './components/OrganizationView';
 import { AdminProfileView } from './components/AdminProfileView';
+import { LoginModal } from './components/LoginModal';
 import { api } from './api';
 import {
   CandidateProfile,
@@ -50,6 +51,8 @@ export const App: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isCandidateModalOpen, setIsCandidateModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [viewScope, setViewScope] = useState<'assigned' | 'all'>('all');
   const [editingCandidate, setEditingCandidate] = useState<CandidateProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +91,9 @@ export const App: React.FC = () => {
       setApplications(apps);
       setAiSettings(settings);
       setCurrentUser(me);
+      if (me?.role && me.role !== 'org_admin') {
+        setViewScope('assigned');
+      }
       setOrganization(org);
       setTeamMembers(members);
       setCountryTeams(desks);
@@ -350,7 +356,7 @@ export const App: React.FC = () => {
   };
 
   const handleCreateMember = async (
-    member: Partial<UserProfile> & { email: string; fullName: string }
+    member: Partial<UserProfile> & { email: string; fullName: string; loginPassword?: string }
   ) => {
     await api.createTeamMember(member);
     await refreshTeamState();
@@ -359,6 +365,17 @@ export const App: React.FC = () => {
   const handleUpdateMember = async (id: string, updates: Partial<UserProfile>) => {
     await api.updateTeamMember(id, updates);
     await refreshTeamState();
+  };
+
+  const handleSetMemberPassword = async (userId: string, password: string) => {
+    await api.setMemberPassword(userId, password);
+    await refreshTeamState();
+  };
+
+  const handleLogin = async (email: string, password: string) => {
+    const { user } = await api.login(email, password);
+    setViewScope(user.role !== 'org_admin' ? 'assigned' : 'all');
+    await loadAllData();
   };
 
   const handleDeleteMember = async (id: string) => {
@@ -397,7 +414,31 @@ export const App: React.FC = () => {
     setCandidates(cands);
   };
 
-  const filteredCandidates = candidates.filter((c) => {
+  const isCandidateAssignedToMe = (c: CandidateProfile): boolean => {
+    if (!currentUser) return true;
+    if (c.assignedConsultantId === currentUser.id) return true;
+    if (
+      !c.assignedConsultantId &&
+      c.countryTeamId &&
+      (currentUser.countryTeamIds || []).includes(c.countryTeamId)
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  const assignedCandidates = candidates.filter(isCandidateAssignedToMe);
+  const assignedCandidateIds = new Set(assignedCandidates.map((c) => c.id));
+  const assignedApplications = applications.filter(
+    (app) =>
+      (currentUser && app.assignedConsultantId === currentUser.id) ||
+      assignedCandidateIds.has(app.candidateId)
+  );
+
+  const scopedCandidates = viewScope === 'assigned' ? assignedCandidates : candidates;
+  const scopedApplications = viewScope === 'assigned' ? assignedApplications : applications;
+
+  const filteredCandidates = scopedCandidates.filter((c) => {
     const q = searchTerm.toLowerCase();
     if (!q) return true;
     return (
@@ -416,8 +457,8 @@ export const App: React.FC = () => {
       <Sidebar
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
-        candidateCount={candidates.length}
-        applicationCount={applications.length}
+        candidateCount={scopedCandidates.length}
+        applicationCount={scopedApplications.length}
         teamCount={teamMembers.length}
         organizationName={organization?.name}
       />
@@ -442,6 +483,7 @@ export const App: React.FC = () => {
           storageStatus={storageStatus}
           onOpenActiveCandidate={() => setCurrentTab('candidates')}
           onOpenAdminProfile={() => setCurrentTab('admin-profile')}
+          onSwitchAccount={() => setIsLoginModalOpen(true)}
         />
 
         <main className="flex-1 overflow-y-auto px-6 py-6 lg:px-8 lg:py-7">
@@ -463,11 +505,59 @@ export const App: React.FC = () => {
               </div>
             ) : (
               <>
+                {currentUser &&
+                  (currentTab === 'dashboard' ||
+                    currentTab === 'candidates' ||
+                    currentTab === 'applications') && (
+                    <div className="mb-5 p-2.5 rounded-xl bg-surface-card border border-hairline flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs text-ink-secondary">
+                        <span>
+                          Signed in as{' '}
+                          <span className="text-ink-primary font-medium">{currentUser.fullName}</span>
+                        </span>
+                        <span className="text-ink-muted">·</span>
+                        <span className="font-mono text-brass">
+                          {assignedCandidates.length} assigned students · {assignedApplications.length}{' '}
+                          applications
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setViewScope('assigned')}
+                          className={`h-7 px-3 rounded-lg text-xs transition-colors ${
+                            viewScope === 'assigned'
+                              ? 'bg-surface-raised border border-brass-border text-ink-primary font-medium'
+                              : 'text-ink-secondary hover:text-ink-primary border border-transparent'
+                          }`}
+                        >
+                          My assigned ({assignedCandidates.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewScope('all')}
+                          className={`h-7 px-3 rounded-lg text-xs transition-colors ${
+                            viewScope === 'all'
+                              ? 'bg-surface-raised border border-brass-border text-ink-primary font-medium'
+                              : 'text-ink-secondary hover:text-ink-primary border border-transparent'
+                          }`}
+                        >
+                          All agency ({candidates.length})
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                 {currentTab === 'dashboard' && (
                   <DashboardStats
-                    candidates={candidates}
-                    applications={applications}
-                    selectedCandidate={selectedCandidate || candidates[0] || null}
+                    candidates={scopedCandidates}
+                    applications={scopedApplications}
+                    selectedCandidate={
+                      (selectedCandidate &&
+                        scopedCandidates.find((c) => c.id === selectedCandidate.id)) ||
+                      scopedCandidates[0] ||
+                      null
+                    }
                     onSelectTab={setCurrentTab}
                     onSelectCandidate={handleSelectCandidate}
                     onNewCandidate={() => {
@@ -535,8 +625,8 @@ export const App: React.FC = () => {
 
                 {currentTab === 'applications' && (
                   <ApplicationTracker
-                    applications={applications}
-                    candidates={candidates}
+                    applications={scopedApplications}
+                    candidates={scopedCandidates}
                     countryTeams={countryTeams}
                     onCreateApplication={handleCreateApplication}
                     onUpdateApplication={handleUpdateApplication}
@@ -554,12 +644,14 @@ export const App: React.FC = () => {
                 {currentTab === 'organization' && (
                   <OrganizationView
                     candidates={candidates}
+                    applications={applications}
                     members={teamMembers}
                     countryTeams={countryTeams}
                     operatingCountries={organization?.operatingCountries}
                     currentUserId={currentUser?.id}
                     onCreateMember={handleCreateMember}
                     onUpdateMember={handleUpdateMember}
+                    onSetMemberPassword={handleSetMemberPassword}
                     onDeleteMember={handleDeleteMember}
                     onCreateCountryTeam={handleCreateCountryTeam}
                     onUpdateCountryTeam={handleUpdateCountryTeam}
@@ -606,6 +698,15 @@ export const App: React.FC = () => {
         operatingCountries={organization?.operatingCountries}
         onClose={() => setIsCandidateModalOpen(false)}
         onSave={handleSaveCandidate}
+      />
+
+      {/* Account Login / Switcher Modal */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        members={teamMembers}
+        currentUserId={currentUser?.id}
+        onClose={() => setIsLoginModalOpen(false)}
+        onLogin={handleLogin}
       />
     </div>
   );

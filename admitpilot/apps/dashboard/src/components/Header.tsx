@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, FolderOpen, Database } from 'lucide-react';
+import { Search, FolderOpen, Database, ArrowLeftRight } from 'lucide-react';
 import { UserProfile } from 'admitpilot-shared';
 
 interface HeaderProps {
@@ -15,6 +15,7 @@ interface HeaderProps {
   };
   onOpenActiveCandidate?: () => void;
   onOpenAdminProfile?: () => void;
+  onSwitchAccount?: () => void;
 }
 
 const ROLE_SHORT: Record<string, string> = {
@@ -45,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
   storageStatus,
   onOpenActiveCandidate,
   onOpenAdminProfile,
+  onSwitchAccount,
 }) => {
   const displayName = currentUser?.fullName || 'Sarah Jenkins';
   const displayRole = ROLE_SHORT[currentUser?.role || 'org_admin'] || 'Org admin';
@@ -99,7 +101,18 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        <div className="pl-2.5 border-l border-hairline">
+        <div className="pl-2.5 border-l border-hairline flex items-center gap-1.5">
+          {onSwitchAccount && (
+            <button
+              type="button"
+              onClick={onSwitchAccount}
+              title="Sign in or switch team account"
+              className="h-8 px-2.5 rounded-lg bg-surface-card border border-hairline hover:border-hairline-strong text-xs text-ink-secondary hover:text-ink-primary inline-flex items-center gap-1.5 transition-colors duration-150 ease-quart"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 text-ink-muted" strokeWidth={1.5} />
+              <span className="hidden xl:inline">Switch account</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onOpenAdminProfile}
