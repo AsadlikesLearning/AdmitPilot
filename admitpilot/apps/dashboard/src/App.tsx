@@ -110,6 +110,41 @@ export const App: React.FC = () => {
     loadAllData();
   }, []);
 
+  // Auto-refresh candidate documents & profile when switching to Document review / Candidates
+  // or when returning focus to the dashboard tab (e.g. after a student uploads via ?intake= link)
+  useEffect(() => {
+    if (!selectedCandidate?.id) return;
+    if (currentTab === 'documents' || currentTab === 'candidates') {
+      loadCandidateSubresources(selectedCandidate.id);
+    }
+  }, [currentTab, selectedCandidate?.id]);
+
+  useEffect(() => {
+    if (!selectedCandidate?.id) return;
+    let lastRefresh = 0;
+    const refreshActiveDossier = () => {
+      if (document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      if (now - lastRefresh < 2000) return;
+      lastRefresh = now;
+      loadCandidateSubresources(selectedCandidate.id);
+      api
+        .getCandidates()
+        .then((cands) => {
+          setCandidates(cands);
+          const fresh = cands.find((c) => c.id === selectedCandidate.id);
+          if (fresh) setSelectedCandidate(fresh);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener('focus', refreshActiveDossier);
+    document.addEventListener('visibilitychange', refreshActiveDossier);
+    return () => {
+      window.removeEventListener('focus', refreshActiveDossier);
+      document.removeEventListener('visibilitychange', refreshActiveDossier);
+    };
+  }, [selectedCandidate?.id]);
+
   const loadAllData = async () => {
     setLoading(true);
     setError(null);
